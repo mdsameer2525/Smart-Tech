@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BrandLogo } from './BrandLogo';
 
 export function Navbar() {
   const { t, i18n } = useTranslation();
@@ -27,12 +28,13 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
-        {/* Zone 1: Single-line Brand wordmark */}
+        {/* Zone 1: Brand mark + wordmark */}
         <Link
           to="/"
-          className="font-display text-xl font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-2.5 font-display text-xl font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
         >
-          {t('brand')}
+          <BrandLogo size={28} />
+          <span>{t('brand')}</span>
         </Link>
 
         {/* Zone 2: Concise single-line navigation links */}

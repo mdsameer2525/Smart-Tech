@@ -1059,4 +1059,791 @@ export function seedDatabaseIfEmpty(db: Database.Database): void {
     'notif.progress_milestone',
     JSON.stringify({ mastered: 11, total: 15 })
   );
+
+  seedAdditionalCoursesIfMissing(db);
 }
+
+interface ExtraCourseBlueprint {
+  title: string;
+  description: string;
+  category: string;
+  concepts: SeedConcept[];
+  edges: Array<[string, string]>;
+}
+
+const ADDITIONAL_COURSES: ExtraCourseBlueprint[] = [
+  {
+    title: 'Web Engineering & Full-Stack Architecture',
+    description:
+      'Progress systematically from semantic markup and responsive CSS through JavaScript DOM events, React components, and RESTful Express backends.',
+    category: 'Web Development',
+    concepts: [
+      {
+        key: 'web_html',
+        title: 'Semantic HTML & Accessibility',
+        description: 'Structure web documents cleanly with landmarks, forms, and ARIA semantics.',
+        lesson_content: `Semantic HTML gives meaning and keyboard/screen-reader accessibility to every page section before any styling or scripting is applied.
+
+Key Practices:
+1. Landmark Elements: Use <header>, <nav>, <main>, <section>, and <footer> instead of anonymous nested <div> containers.
+2. Accessible Controls: Pair <label> elements with form inputs and use <button> for actions rather than clickable spans.
+3. Document Outline: Maintain a single logical <h1> followed by sequential heading levels.`,
+        video_url: 'https://www.youtube.com/watch?v=kUMe1FH4CHE',
+        estimated_duration: 20,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why should interactive actions use native <button> elements instead of <div> tags?',
+            options: [
+              'Native buttons provide built-in keyboard focus, Enter/Space activation, and screen-reader roles',
+              'Buttons automatically connect to SQLite',
+              'Div tags cannot accept CSS classes',
+              'Buttons load images twice as fast',
+            ],
+            correct_answer: 0,
+            explanation: 'Native <button> elements carry built-in accessibility semantics and keyboard interaction.',
+          },
+          {
+            question: 'Which HTML element identifies the primary unique content of a page?',
+            options: ['<main>', '<script>', '<meta>', '<br>'],
+            correct_answer: 0,
+            explanation: 'The <main> landmark wraps the core page content.',
+          },
+        ],
+      },
+      {
+        key: 'web_css',
+        title: 'Modern CSS & Responsive Layouts',
+        description: 'Build adaptive layouts using Flexbox, CSS Grid, and fluid spacing scales.',
+        lesson_content: `Modern CSS layouts adapt smoothly across mobile, tablet, and desktop viewports using Grid and Flexbox.
+
+Core Layout Tools:
+1. Flexbox: Ideal for one-dimensional rows or columns (navigation bars, button groups).
+2. CSS Grid: Ideal for two-dimensional page structures and multi-column card layouts.
+3. Mobile-First Breakpoints: Define base readable spacing first and expand columns at md/lg widths.`,
+        video_url: 'https://www.youtube.com/watch?v=JJSoZeoSYgM',
+        estimated_duration: 25,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which CSS layout system is designed primarily for two-dimensional rows and columns simultaneously?',
+            options: ['CSS Grid', 'Float left', 'Text-align', 'Z-index'],
+            correct_answer: 0,
+            explanation: 'CSS Grid manages both rows and columns in a single container.',
+          },
+          {
+            question: 'What does mobile-first responsive styling mean?',
+            options: [
+              'Designing clean single-column defaults first and layering multi-column breakpoints for larger screens',
+              'Blocking desktop browsers completely',
+              'Hardcoding 1440px widths on every element',
+              'Disabling text wrapping',
+            ],
+            correct_answer: 0,
+            explanation: 'Mobile-first CSS builds a clean base layout and enhances it progressively via min-width breakpoints.',
+          },
+        ],
+      },
+      {
+        key: 'web_js_dom',
+        title: 'JavaScript & DOM Events',
+        description: 'Handle user interactions, asynchronous fetch calls, and state updates in the browser.',
+        lesson_content: `JavaScript brings static documents to life by listening to user events, updating the Document Object Model (DOM), and communicating with backend APIs via fetch().
+
+Core Mechanics:
+1. Event Listeners: Respond cleanly to clicks, form submissions, and keyboard input.
+2. Async / Await & Fetch: Request JSON data from REST endpoints without blocking the UI thread.
+3. Error & Loading States: Always provide clear feedback while asynchronous requests are in flight.`,
+        video_url: 'https://www.youtube.com/watch?v=5fb2aPlgoys',
+        estimated_duration: 30,
+        threshold: 70,
+        questions: [
+          {
+            question: 'What does event.preventDefault() accomplish inside a form submit handler?',
+            options: [
+              'Prevents the browser from triggering a full page reload so JavaScript can submit via fetch()',
+              'Deletes the form inputs',
+              'Encrypts CSS files',
+              'Closes the browser tab',
+            ],
+            correct_answer: 0,
+            explanation: 'SPA forms call preventDefault() to handle validation and API submission smoothly in JavaScript.',
+          },
+          {
+            question: 'Why do modern browsers use async/await with fetch()?',
+            options: [
+              'To wait for network responses cleanly without freezing the user interface',
+              'To skip HTTP status codes',
+              'To replace HTML tags',
+              'To disable JSON parsing',
+            ],
+            correct_answer: 0,
+            explanation: 'Asynchronous requests keep the UI responsive while waiting for server data.',
+          },
+        ],
+      },
+      {
+        key: 'web_react',
+        title: 'React Component Architecture',
+        description: 'Compose declarative UI trees with props, hooks, and predictable state flow.',
+        lesson_content: `React models interfaces as pure functions of state, breaking complex pages into reusable, composable components.
+
+Foundations:
+1. Props & Composition: Pass data downward clearly and keep components focused on single responsibilities.
+2. Hooks (useState, useEffect, useMemo): Manage local UI state, synchronize side effects, and memoize derived calculations.
+3. Lifting State: Share state cleanly via common parent components or React Context.`,
+        video_url: 'https://www.youtube.com/watch?v=SqcY0GlETPk',
+        estimated_duration: 35,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why should React state never be mutated directly without calling its setter function?',
+            options: [
+              'React relies on the state setter to schedule re-renders and keep the UI synchronized',
+              'Mutating objects turns CSS into HTML',
+              'Setters automatically delete database rows',
+              'Direct mutation disables JavaScript loops',
+            ],
+            correct_answer: 0,
+            explanation: 'Calling the setter notifies React that state changed so the component re-renders.',
+          },
+          {
+            question: 'What is the purpose of a unique key prop when rendering lists in React?',
+            options: [
+              'It helps React identify which list items changed, were added, or were removed efficiently',
+              'It encrypts user passwords',
+              'It changes the font family',
+              'It runs SQL queries',
+            ],
+            correct_answer: 0,
+            explanation: 'Stable keys enable accurate reconciliation during list updates.',
+          },
+        ],
+      },
+      {
+        key: 'web_api',
+        title: 'REST APIs & Express Backend',
+        description: 'Design resource-oriented HTTP endpoints with validation and status codes.',
+        lesson_content: `Express servers expose structured REST endpoints that enforce validation, authentication, and business rules on the server.
+
+API Principles:
+1. Resource Verbs: Use GET to read, POST to create, PUT/PATCH to update, and DELETE to remove.
+2. Meaningful Status Codes: Return 201 for creation, 400 for validation failures, 401/403 for auth/permissions, and 404 when missing.
+3. Server-Side Invariants: Never trust client-only checks for permissions or graph constraints.`,
+        video_url: 'https://www.youtube.com/watch?v=SccSCuHhOw0',
+        estimated_duration: 30,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which HTTP status code appropriately rejects a request that fails prerequisite unlocking rules?',
+            options: ['403 Forbidden', '200 OK', '201 Created', '304 Not Modified'],
+            correct_answer: 0,
+            explanation: '403 Forbidden signals that the authenticated user is not permitted to access the locked resource.',
+          },
+          {
+            question: 'Why must critical validation run on the backend even when the frontend validates inputs?',
+            options: [
+              'Clients can be bypassed directly via curl or API tools, so the backend is the source of truth',
+              'Frontend JavaScript cannot compare numbers',
+              'Browsers ignore POST requests',
+              'Backend code cannot return JSON',
+            ],
+            correct_answer: 0,
+            explanation: 'Server validation protects data integrity regardless of how the API is called.',
+          },
+        ],
+      },
+      {
+        key: 'web_fullstack',
+        title: 'Full-Stack State & Persistence',
+        description: 'Connect React frontends, Express APIs, and relational databases end-to-end.',
+        lesson_content: `Production full-stack applications synchronize UI views with durable database transactions across reloads and sessions.
+
+End-to-End Flow:
+1. Auth Tokens: Persist signed JWT tokens safely and attach Bearer headers on authenticated API requests.
+2. Optimistic vs. Verified Updates: Re-fetch or reconcile derived state (such as unlocked nodes) directly from server responses.
+3. Transactions: Wrap multi-table updates in database transactions so partial failures never corrupt state.`,
+        video_url: 'https://www.youtube.com/watch?v=nu_pCVPKzTk',
+        estimated_duration: 40,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why should multi-step curriculum updates run inside a database transaction?',
+            options: [
+              'So either all related changes succeed together or none apply if an error occurs',
+              'To make HTML tables wider',
+              'To skip authentication checks',
+              'To convert SQL into CSS',
+            ],
+            correct_answer: 0,
+            explanation: 'Atomic transactions guarantee consistency across tables.',
+          },
+          {
+            question: 'Where should user progress be stored so it survives browser refreshes and device switches?',
+            options: [
+              'In the backend database via REST APIs',
+              'Only in temporary React component variables',
+              'Inside CSS comments',
+              'In image alt text',
+            ],
+            correct_answer: 0,
+            explanation: 'Database persistence preserves learner state across sessions and devices.',
+          },
+        ],
+      },
+    ],
+    edges: [
+      ['web_html', 'web_css'],
+      ['web_html', 'web_js_dom'],
+      ['web_css', 'web_react'],
+      ['web_js_dom', 'web_react'],
+      ['web_js_dom', 'web_api'],
+      ['web_react', 'web_fullstack'],
+      ['web_api', 'web_fullstack'],
+    ],
+  },
+  {
+    title: 'Relational Databases & SQL Mastery',
+    description:
+      'Design normalized relational schemas, enforce referential integrity with foreign keys, write expressive multi-table SQL joins, and optimize queries with indexes.',
+    category: 'Databases',
+    concepts: [
+      {
+        key: 'db_modeling',
+        title: 'Relational Data Modeling',
+        description: 'Represent real-world entities, attributes, and cardinalities as tables.',
+        lesson_content: `Relational modeling organizes application data into structured tables (relations) with typed columns and well-defined relationships.
+
+Core Building Blocks:
+1. Entities & Rows: Each table captures one entity type (users, courses, concepts), and each row is a single record.
+2. Cardinality: Identify 1:1, 1:N (course to concepts), and M:N (learners to courses via enrollments) relationships early.
+3. Constraints: Enforce NOT NULL and CHECK constraints at the schema level.`,
+        video_url: 'https://www.youtube.com/watch?v=ztHopE5Wnpc',
+        estimated_duration: 20,
+        threshold: 70,
+        questions: [
+          {
+            question: 'How is a many-to-many relationship (such as Learners and Courses) modeled in SQL?',
+            options: [
+              'Using a junction/bridge table such as enrollments with foreign keys to both tables',
+              'Storing comma-separated IDs inside a single text column',
+              'Creating 100 duplicate course tables',
+              'Deleting primary keys',
+            ],
+            correct_answer: 0,
+            explanation: 'A junction table cleanly models many-to-many associations with referential integrity.',
+          },
+          {
+            question: 'What does a CHECK constraint enforce in SQL?',
+            options: [
+              'That column values satisfy a specific boolean condition on insert or update',
+              'Automatic JSON formatting',
+              'UI font sizing',
+              'Network routing',
+            ],
+            correct_answer: 0,
+            explanation: 'CHECK constraints validate allowed values directly inside the database engine.',
+          },
+        ],
+      },
+      {
+        key: 'db_keys',
+        title: 'Primary & Foreign Keys',
+        description: 'Guarantee unique row identity and referential integrity across tables.',
+        lesson_content: `Keys bind relational tables together reliably and prevent orphaned records.
+
+Key Types:
+1. Primary Key (PK): Uniquely identifies every row in a table (e.g., id INTEGER PRIMARY KEY).
+2. Foreign Key (FK): References a primary key in another table, ensuring every prerequisite_concept_id points to a real concept.
+3. Cascading vs. Archival Policies: Decide deliberately between ON DELETE CASCADE and soft status archival when preserving history.`,
+        video_url: 'https://www.youtube.com/watch?v=8wUU93T9x3M',
+        estimated_duration: 20,
+        threshold: 70,
+        questions: [
+          {
+            question: 'What does enabling foreign key enforcement prevent?',
+            options: [
+              'Inserting child records that reference nonexistent parent rows',
+              'Selecting columns with WHERE',
+              'Sorting results alphabetically',
+              'Using integer columns',
+            ],
+            correct_answer: 0,
+            explanation: 'Foreign keys preserve referential integrity across related tables.',
+          },
+          {
+            question: 'Why might an EdTech platform archive a split concept with status="retired" instead of hard-deleting it?',
+            options: [
+              'To preserve historical quiz attempts and learner mastery records tied to that concept ID',
+              'Because SQLite cannot run DELETE statements',
+              'To increase database bugs',
+              'To hide course titles',
+            ],
+            correct_answer: 0,
+            explanation: 'Soft archival keeps historical learner records intact across curriculum updates.',
+          },
+        ],
+      },
+      {
+        key: 'db_queries',
+        title: 'SQL Queries & Filtering',
+        description: 'Retrieve, filter, aggregate, and sort relational records with SELECT.',
+        lesson_content: `SQL provides a declarative language to ask for the exact slice of data your application needs.
+
+Essential Clauses:
+1. SELECT & WHERE: Choose specific columns and filter rows by exact predicates.
+2. ORDER BY & LIMIT: Sort results deterministically and paginate large lists.
+3. GROUP BY & Aggregates: Compute COUNT(), SUM(), AVG(), and MAX() across groups.`,
+        video_url: 'https://www.youtube.com/watch?v=HXV3zeQKqGY',
+        estimated_duration: 25,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which SQL clause filters individual rows before grouping or sorting?',
+            options: ['WHERE', 'ORDER BY', 'LIMIT', 'CREATE'],
+            correct_answer: 0,
+            explanation: 'WHERE filters rows prior to aggregation and sorting.',
+          },
+          {
+            question: 'Which aggregate function computes a learner’s highest score across quiz attempts?',
+            options: ['MAX(score)', 'COUNT(*)', 'LOWER(score)', 'INSERT(score)'],
+            correct_answer: 0,
+            explanation: 'MAX() returns the largest value in a column.',
+          },
+        ],
+      },
+      {
+        key: 'db_joins',
+        title: 'Joins & Multi-Table Queries',
+        description: 'Combine normalized tables using INNER JOIN and LEFT JOIN.',
+        lesson_content: `Because normalized schemas store entities in separate tables, JOIN operations reunite related data cleanly in a single query.
+
+Join Patterns:
+1. INNER JOIN: Returns rows that have matching keys in both tables.
+2. LEFT JOIN: Keeps all rows from the left table even when no matching row exists yet on the right (such as concepts without mastery records yet).
+3. Table Aliases: Keep multi-table queries concise and readable.`,
+        video_url: 'https://www.youtube.com/watch?v=9yeOJ0ZMUYw',
+        estimated_duration: 30,
+        threshold: 70,
+        questions: [
+          {
+            question: 'When should you prefer LEFT JOIN over INNER JOIN?',
+            options: [
+              'When you want all records from the primary table even if related optional records do not exist yet',
+              'When you want to delete both tables',
+              'When there are no columns in either table',
+              'Only inside CSS files',
+            ],
+            correct_answer: 0,
+            explanation: 'LEFT JOIN preserves unmatched rows from the left table with NULLs for missing right columns.',
+          },
+          {
+            question: 'What condition links tables inside an ON clause?',
+            options: [
+              'Matching a foreign key column to its referenced primary key',
+              'Comparing random strings',
+              'Setting the server port',
+              'Sorting timestamps',
+            ],
+            correct_answer: 0,
+            explanation: 'Joins typically match foreign keys to primary keys.',
+          },
+        ],
+      },
+      {
+        key: 'db_norm',
+        title: 'Normalization & Schema Integrity',
+        description: 'Eliminate redundant data anomalies using First, Second, and Third Normal Forms.',
+        lesson_content: `Normalization removes duplicated data so updates happen in one canonical place without contradictions.
+
+Normal Forms Summary:
+1. 1NF: Atomic column values — no repeating arrays packed into single text cells when separate rows belong in a child table.
+2. 2NF & 3NF: Every non-key attribute depends strictly on the primary key, preventing update and deletion anomalies.
+3. Unique Constraints: Prevent duplicate enrollments or duplicate prerequisite edges.`,
+        video_url: 'https://www.youtube.com/watch?v=GFQaEYEc8_8',
+        estimated_duration: 25,
+        threshold: 70,
+        questions: [
+          {
+            question: 'What problem does database normalization primarily prevent?',
+            options: [
+              'Data redundancy and inconsistent update/insertion/deletion anomalies',
+              'High screen brightness',
+              'Slow CSS animations',
+              'Missing HTML titles',
+            ],
+            correct_answer: 0,
+            explanation: 'Normalization ensures each fact is stored once in its canonical table.',
+          },
+          {
+            question: 'How does UNIQUE(course_id, prerequisite_concept_id, dependent_concept_id) help a graph table?',
+            options: [
+              'It prevents duplicate identical prerequisite edges between the same two concepts',
+              'It allows cycles',
+              'It deletes all courses',
+              'It disables indexes',
+            ],
+            correct_answer: 0,
+            explanation: 'Composite unique constraints block duplicate edge rows at the database level.',
+          },
+        ],
+      },
+      {
+        key: 'db_indexes',
+        title: 'Indexes & Query Optimization',
+        description: 'Accelerate lookups with B-Tree indexes and analyze execution plans.',
+        lesson_content: `As tables grow, full table scans become slow. Indexes create sorted lookup structures (B-Trees) for rapid retrieval.
+
+Optimization Guidelines:
+1. Index Foreign Keys & Hot Filters: Index columns frequently used in WHERE and JOIN clauses (e.g., course_id, learner_id).
+2. Read-Write Tradeoff: Indexes speed up SELECT queries while adding minor overhead to INSERT/UPDATE operations.
+3. Parameterized Queries: Always bind parameters (?) to prevent SQL injection and reuse query plans.`,
+        video_url: 'https://www.youtube.com/watch?v=-qNSXK7s7_w',
+        estimated_duration: 35,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why should you avoid creating indexes on every single column indiscriminately?',
+            options: [
+              'Each extra index consumes storage and slows down INSERT, UPDATE, and DELETE writes',
+              'Indexes break SELECT queries',
+              'Indexes delete foreign keys',
+              'SQLite allows only one index per database',
+            ],
+            correct_answer: 0,
+            explanation: 'Indexes accelerate reads at the cost of extra disk space and write maintenance.',
+          },
+          {
+            question: 'Why are parameterized SQL queries (using ?) mandatory in production?',
+            options: [
+              'They neutralize SQL injection attacks by separating SQL syntax from user-supplied values',
+              'They convert SQLite into MongoDB',
+              'They bypass authentication',
+              'They remove primary keys',
+            ],
+            correct_answer: 0,
+            explanation: 'Bound parameters treat user input strictly as data, never executable SQL.',
+          },
+        ],
+      },
+    ],
+    edges: [
+      ['db_modeling', 'db_keys'],
+      ['db_modeling', 'db_queries'],
+      ['db_keys', 'db_joins'],
+      ['db_queries', 'db_joins'],
+      ['db_keys', 'db_norm'],
+      ['db_joins', 'db_indexes'],
+      ['db_norm', 'db_indexes'],
+    ],
+  },
+  {
+    title: 'Python for Data Science & Machine Learning',
+    description:
+      'Build quantitative foundations from Python essentials and vectorized NumPy arrays through Pandas data engineering, probability, and supervised ML models.',
+    category: 'Data Science & AI',
+    concepts: [
+      {
+        key: 'py_core',
+        title: 'Python Core & Environments',
+        description: 'Write idiomatic Python functions, list comprehensions, and isolated virtualenvs.',
+        lesson_content: `Python’s readable syntax and rich scientific ecosystem make it the standard language for data analysis and machine learning.
+
+Foundations:
+1. Clean Data Structures: Lists, dictionaries, sets, and tuples form the backbone of data pipelines.
+2. List Comprehensions: Express transformations concisely: [x * 2 for x in scores if x >= 70].
+3. Virtual Environments: Isolate project dependencies cleanly with venv and requirements files.`,
+        video_url: 'https://www.youtube.com/watch?v=rfscVS0vtbw',
+        estimated_duration: 20,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which Python built-in collection guarantees unique elements with fast membership lookup?',
+            options: ['set', 'list', 'tuple', 'string'],
+            correct_answer: 0,
+            explanation: 'Python sets store unique hashable elements with O(1) average lookup.',
+          },
+          {
+            question: 'Why do data engineers use virtual environments (venv)?',
+            options: [
+              'To isolate package versions per project and prevent dependency conflicts',
+              'To speed up monitor refresh rates',
+              'To replace SQL databases',
+              'To compile CSS files',
+            ],
+            correct_answer: 0,
+            explanation: 'Virtual environments keep project dependencies reproducible and isolated.',
+          },
+        ],
+      },
+      {
+        key: 'py_numpy',
+        title: 'NumPy Arrays & Vectorization',
+        description: 'Perform fast matrix arithmetic and broadcasting without slow Python loops.',
+        lesson_content: `NumPy introduces contiguous N-dimensional arrays (ndarray) backed by compiled C routines for rapid numerical computing.
+
+Key Concepts:
+1. Vectorized Operations: Add or multiply entire arrays in one expression instead of element-by-element Python loops.
+2. Shapes & Broadcasting: Align arrays of compatible dimensions automatically during arithmetic.
+3. Slicing & Views: Slice rows and columns without copying underlying memory unnecessarily.`,
+        video_url: 'https://www.youtube.com/watch?v=QUT1VHiLmmI',
+        estimated_duration: 25,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why is vectorized NumPy arithmetic much faster than Python for-loops on large datasets?',
+            options: [
+              'Operations execute on homogeneous contiguous memory inside compiled C loops',
+              'NumPy skips floating-point math',
+              'NumPy sends every number over HTTP',
+              'Python loops cannot add integers',
+            ],
+            correct_answer: 0,
+            explanation: 'Vectorization avoids per-element Python interpreter overhead.',
+          },
+          {
+            question: 'What property inspects the dimensions (rows, columns) of a NumPy ndarray?',
+            options: ['.shape', '.html', '.font', '.routes'],
+            correct_answer: 0,
+            explanation: 'arr.shape returns a tuple describing the size along each axis.',
+          },
+        ],
+      },
+      {
+        key: 'py_pandas',
+        title: 'Pandas DataFrames & Cleaning',
+        description: 'Load tabular datasets, handle missing values, and compute grouped summaries.',
+        lesson_content: `Pandas builds labeled 2D DataFrames atop NumPy to make tabular data inspection and cleaning intuitive.
+
+Workflows:
+1. Inspection: Use .head(), .info(), and .describe() to audit schemas and distributions.
+2. Cleaning: Handle missing values (.dropna(), .fillna()) and cast column types reliably.
+3. GroupBy Aggregation: Summarize metrics across categories cleanly.`,
+        video_url: 'https://www.youtube.com/watch?v=vmEHCJofslg',
+        estimated_duration: 30,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which Pandas method groups rows by a category column to compute summary statistics?',
+            options: ['df.groupby()', 'df.render()', 'df.style()', 'df.loop()'],
+            correct_answer: 0,
+            explanation: 'groupby() splits data into groups, applies an aggregation, and combines results.',
+          },
+          {
+            question: 'Why must missing values be addressed before training most ML models?',
+            options: [
+              'Many mathematical algorithms cannot compute gradients or distances over NaN entries',
+              'Missing values double CSV font sizes',
+              'Pandas deletes files containing zeros',
+              'Models only accept strings',
+            ],
+            correct_answer: 0,
+            explanation: 'NaN values break numeric matrix operations unless imputed or filtered.',
+          },
+        ],
+      },
+      {
+        key: 'py_viz',
+        title: 'Data Visualization & Storytelling',
+        description: 'Select clear charts—histograms, scatter plots, and box plots—for exploratory analysis.',
+        lesson_content: `Visualizing distributions and relationships exposes outliers, skew, and correlations before modeling.
+
+Chart Selection:
+1. Histograms & Box Plots: Reveal distribution shape, spread, and outliers for single variables.
+2. Scatter Plots: Show correlation and non-linear patterns between two continuous variables.
+3. Clarity First: Label axes with explicit units and avoid cluttering plots with unnecessary 3D effects.`,
+        video_url: 'https://www.youtube.com/watch?v=a9UrKTVEeZA',
+        estimated_duration: 25,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Which chart best reveals whether two continuous variables have a linear or curved relationship?',
+            options: ['Scatter plot', 'Pie chart', 'Single KPI number', 'Word cloud'],
+            correct_answer: 0,
+            explanation: 'Scatter plots map pairs of continuous measurements directly onto X and Y axes.',
+          },
+          {
+            question: 'What does a histogram display?',
+            options: [
+              'The frequency distribution of values across binned intervals',
+              'Database foreign keys',
+              'Network latency logs',
+              'File directory trees',
+            ],
+            correct_answer: 0,
+            explanation: 'Histograms group continuous values into bins to show distribution density.',
+          },
+        ],
+      },
+      {
+        key: 'py_math',
+        title: 'Probability & Linear Algebra Basics',
+        description: 'Master dot products, matrix multiplication, variance, and Bayes reasoning.',
+        lesson_content: `Linear algebra and probability form the mathematical engine behind every machine learning algorithm.
+
+Essential Tools:
+1. Vectors & Dot Products: Measure similarity and compute weighted feature sums (w · x + b).
+2. Mean, Variance & Standard Deviation: Quantify central tendency and spread for feature scaling.
+3. Conditional Probability: Reason cleanly about uncertainty and class likelihoods.`,
+        video_url: 'https://www.youtube.com/watch?v=fNk_zzaMoSs',
+        estimated_duration: 30,
+        threshold: 70,
+        questions: [
+          {
+            question: 'What geometric operation does the weighted sum w · x + b in a linear model rely on?',
+            options: ['Vector dot product', 'String concatenation', 'HTML parsing', 'Topological sort'],
+            correct_answer: 0,
+            explanation: 'Linear predictions compute the dot product between feature vector x and weight vector w.',
+          },
+          {
+            question: 'Why do engineers standardize features (zero mean, unit variance) before training gradient-based models?',
+            options: [
+              'So features on large scales do not dominate optimization over smaller-scale features',
+              'To delete half of the training rows',
+              'To disable validation splits',
+              'To convert numbers into images',
+            ],
+            correct_answer: 0,
+            explanation: 'Feature scaling balances gradient steps and accelerates convergence.',
+          },
+        ],
+      },
+      {
+        key: 'py_ml',
+        title: 'Supervised Machine Learning',
+        description: 'Train, evaluate, and regularize regression and classification pipelines without data leakage.',
+        lesson_content: `Supervised learning maps input features X to target labels y using labeled historical examples while guarding against overfitting.
+
+Pipeline Discipline:
+1. Train / Validation / Test Split: Hold out unseen test data before fitting scalers or models to avoid data leakage.
+2. Regression vs. Classification: Predict continuous targets (RMSE/MAE) or discrete classes (Accuracy, Precision, Recall, F1).
+3. Bias-Variance Tradeoff: Use cross-validation and regularization to generalize reliably to new data.`,
+        video_url: 'https://www.youtube.com/watch?v=i_LwzRVP7bg',
+        estimated_duration: 45,
+        threshold: 70,
+        questions: [
+          {
+            question: 'Why must feature scaling statistics (mean/std) be fit ONLY on the training split?',
+            options: [
+              'To prevent test-set data leakage from inflating evaluation accuracy artificially',
+              'Because test sets have no numbers',
+              'To slow down evaluation',
+              'Because NumPy cannot compute means twice',
+            ],
+            correct_answer: 0,
+            explanation: 'Fitting preprocessing transforms solely on training data preserves an honest unseen test evaluation.',
+          },
+          {
+            question: 'What characterizes an overfitted model?',
+            options: [
+              'Very high accuracy on training data but poor generalization on unseen validation data',
+              'High accuracy on both training and unseen test data',
+              'Zero parameters',
+              'Equal performance on random noise',
+            ],
+            correct_answer: 0,
+            explanation: 'Overfitting memorizes training noise rather than learning generalizable signal.',
+          },
+        ],
+      },
+    ],
+    edges: [
+      ['py_core', 'py_numpy'],
+      ['py_numpy', 'py_pandas'],
+      ['py_pandas', 'py_viz'],
+      ['py_numpy', 'py_math'],
+      ['py_pandas', 'py_ml'],
+      ['py_math', 'py_ml'],
+    ],
+  },
+];
+
+export function seedAdditionalCoursesIfMissing(db: Database.Database): void {
+  const instructor = db
+    .prepare("SELECT id FROM users WHERE role = 'instructor' ORDER BY id ASC LIMIT 1")
+    .get() as { id: number } | undefined;
+  if (!instructor) return;
+
+  const findCourse = db.prepare('SELECT id FROM courses WHERE title = ?');
+  const insertCourse = db.prepare(
+    'INSERT INTO courses (instructor_id, title, description, category, status) VALUES (?, ?, ?, ?, ?)'
+  );
+  const insertConcept = db.prepare(
+    'INSERT INTO concepts (course_id, title, description, lesson_content, video_url, estimated_duration, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  );
+  const insertQuiz = db.prepare(
+    'INSERT INTO quizzes (concept_id, title, mastery_threshold) VALUES (?, ?, ?)'
+  );
+  const insertQuestion = db.prepare(
+    'INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?)'
+  );
+  const insertPrereq = db.prepare(
+    'INSERT INTO prerequisites (course_id, prerequisite_concept_id, dependent_concept_id) VALUES (?, ?, ?)'
+  );
+
+  for (const blueprint of ADDITIONAL_COURSES) {
+    if (findCourse.get(blueprint.title)) {
+      continue;
+    }
+
+    const tx = db.transaction(() => {
+      const cRes = insertCourse.run(
+        instructor.id,
+        blueprint.title,
+        blueprint.description,
+        blueprint.category,
+        'published'
+      );
+      const courseId = Number(cRes.lastInsertRowid);
+      const keyToId = new Map<string, number>();
+
+      for (const c of blueprint.concepts) {
+        const res = insertConcept.run(
+          courseId,
+          c.title,
+          c.description,
+          c.lesson_content,
+          c.video_url,
+          c.estimated_duration,
+          'active'
+        );
+        const conceptId = Number(res.lastInsertRowid);
+        keyToId.set(c.key, conceptId);
+
+        const qRes = insertQuiz.run(conceptId, `${c.title} Mastery Check`, c.threshold);
+        const quizId = Number(qRes.lastInsertRowid);
+        for (const q of c.questions) {
+          insertQuestion.run(
+            quizId,
+            q.question,
+            JSON.stringify(q.options),
+            q.correct_answer,
+            q.explanation
+          );
+        }
+      }
+
+      for (const [fromKey, toKey] of blueprint.edges) {
+        insertPrereq.run(courseId, keyToId.get(fromKey)!, keyToId.get(toKey)!);
+      }
+
+      db.prepare(
+        `INSERT INTO curriculum_history
+          (course_id, instructor_id, change_type, previous_structure, updated_structure, change_description, affected_concepts, affected_learners_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        courseId,
+        instructor.id,
+        'initial_publish',
+        JSON.stringify({ concepts: 0, edges: 0 }),
+        JSON.stringify({ concepts: blueprint.concepts.length, edges: blueprint.edges.length }),
+        `Published ${blueprint.concepts.length}-concept ${blueprint.title} prerequisite graph.`,
+        JSON.stringify(blueprint.concepts.map((c) => c.title)),
+        0
+      );
+    });
+
+    tx();
+  }
+}
+

@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrandLogo } from './components/BrandLogo';
 import { Navbar } from './components/Navbar';
 import { AuthProvider } from './context/AuthContext';
 import { AuthPage } from './pages/AuthPage';
@@ -30,7 +31,10 @@ export default function App() {
           </div>
           <footer className="border-t border-slate-200 bg-white py-6 px-4 sm:px-6">
             <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
-              <span className="font-display font-semibold text-slate-700">Smart-Tech</span>
+              <span className="inline-flex items-center gap-2 font-display font-semibold text-slate-700">
+                <BrandLogo size={20} />
+                <span>Smart-Tech</span>
+              </span>
               <span>Prerequisite-Aware Learning Platform · English · ಕನ್ನಡ · हिन्दी</span>
             </div>
           </footer>

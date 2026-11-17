@@ -4,11 +4,12 @@ import fs from 'fs';
 import path from 'path';
 import { createApp } from './server/app.ts';
 import { getDb } from './server/database/db.ts';
-import { seedDatabaseIfEmpty } from './server/database/seed.ts';
+import { seedAdditionalCoursesIfMissing, seedDatabaseIfEmpty } from './server/database/seed.ts';
 
 async function startServer() {
   const db = getDb();
   seedDatabaseIfEmpty(db);
+  seedAdditionalCoursesIfMissing(db);
 
   const app = createApp(db);
   const PORT = Number(process.env.PORT) || 3000;

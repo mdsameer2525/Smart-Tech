@@ -1,0 +1,25 @@
+export function BrandLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <rect width="36" height="36" rx="9" fill="#3730A3" />
+      <path
+        d="M11 23L18 11.5M25 23L18 11.5M11 23H25"
+        stroke="#A5B4FC"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="11" cy="23" r="3.4" fill="#FFFFFF" />
+      <circle cx="25" cy="23" r="3.4" fill="#FFFFFF" />
+      <circle cx="18" cy="11.5" r="3.8" fill="#34D399" stroke="#FFFFFF" strokeWidth="1.6" />
+    </svg>
+  );
+}
