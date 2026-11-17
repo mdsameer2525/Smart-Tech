@@ -1,0 +1,6 @@
+{
+  "name": "Smart-Tech",
+  "description": "Prerequisite-aware adaptive learning platform built around directed acyclic concept graphs, mastery-based unlocking, personalized learning paths, and live curriculum restructuring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

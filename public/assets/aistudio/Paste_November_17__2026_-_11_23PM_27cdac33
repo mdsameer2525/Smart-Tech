@@ -1,0 +1,1355 @@
+# MASTER PROJECT DEVELOPMENT PROMPT
+# PREREQUISITE-AWARE LEARNING PLATFORM
+
+## 1. PROJECT ROLE AND OBJECTIVE
+
+Act as a senior full-stack software architect, EdTech product designer, graph algorithm engineer, database architect, frontend developer, and QA engineer.
+
+Your task is to design and build a complete, functional, responsive web application for the QUBRIX 12-Hour Internal Hackathon.
+
+**Problem Category:** FULL STACK – EDTECH  
+**Problem Number:** Problem 1  
+**Problem Title:** Prerequisite-Aware Learning Platform  
+**Project Name:** [PROJECT_NAME]
+
+Build a platform where learning is organized around interconnected concepts and prerequisites rather than a simple list of topics.
+
+The platform must ensure that learners understand foundational concepts before moving to advanced concepts. Instructors must be able to modify course structures while learners are actively studying, without losing existing progress or quiz results.
+
+The application must be functional, easy to understand, visually professional, and suitable for a live hackathon demonstration.
+
+---
+
+## 2. UNDERSTAND THE ACTUAL PROBLEM
+
+Most online courses present topics as a flat list.
+
+For example:
+
+Variables → Loops → Functions → Recursion
+
+However, learners may jump directly into advanced concepts without understanding the foundational topics. This causes confusion, learning difficulties, and course dropouts.
+
+Additionally, real-world courses change over time. Instructors may add prerequisites, remove relationships, or split large concepts into smaller ones during an active semester.
+
+The platform must solve these problems by:
+
+- Representing knowledge as a graph of concepts.
+- Connecting concepts through prerequisite relationships.
+- Ensuring learners prove mastery before unlocking advanced concepts.
+- Showing learners which concepts are available and which are locked.
+- Explaining why a concept is locked.
+- Calculating the shortest valid learning path to a selected target concept.
+- Updating learning paths whenever progress or course structure changes.
+- Preserving learner progress and quiz results during curriculum restructuring.
+- Notifying affected learners when course structures change.
+
+The platform must support two primary user roles:
+
+1. Instructor
+2. Learner
+
+Do not turn the application into a generic LMS. The prerequisite graph and its intelligent learning-path logic must remain the central product functionality.
+
+---
+
+## 3. USER ROLES AND FUNCTIONALITIES
+
+### A. INSTRUCTOR
+
+Create a dedicated instructor dashboard.
+
+Instructors must be able to:
+
+- Register and log in.
+- Create and manage courses.
+- Add, edit, and delete concepts.
+- Attach lessons to concepts.
+- Add text-based lessons.
+- Attach video lesson links.
+- Define lesson duration.
+- Create quizzes for concepts.
+- Configure quiz mastery thresholds.
+- Define prerequisite relationships.
+- View the complete course concept graph.
+- Add or remove prerequisite links.
+- Identify invalid prerequisite relationships.
+- Modify course structures while learners are enrolled.
+- Split large concepts into smaller concepts.
+- View affected learners when curriculum structures change.
+- View curriculum change history.
+
+Provide a simple course-management interface.
+
+### B. LEARNER
+
+Create a dedicated learner dashboard.
+
+Learners must be able to:
+
+- Register and log in.
+- Browse available courses.
+- Enroll in courses.
+- View enrolled courses.
+- Open available lessons.
+- Study text lessons.
+- Access video lessons through their links.
+- Mark lessons as completed.
+- Attempt concept quizzes.
+- View quiz scores.
+- View their mastered concepts.
+- View unlocked concepts.
+- View locked concepts.
+- Understand why a concept is locked.
+- Select a target concept.
+- View the shortest valid learning path to that target.
+- See the estimated total learning time.
+- Receive notifications about curriculum changes.
+- Track overall progress for each course.
+
+Keep the learner experience extremely simple.
+
+---
+
+## 4. SIX MANDATORY FEATURES FROM THE PROBLEM STATEMENT
+
+Every feature below must be implemented and tested.
+
+### FEATURE 1: COURSE AND CONCEPT MANAGEMENT
+
+Instructors must be able to create and manage courses.
+
+A course should contain:
+
+- Course ID
+- Course title
+- Description
+- Instructor
+- Category
+- Created date
+- Updated date
+- Course status
+
+Each course should contain multiple concepts.
+
+Each concept should contain:
+
+- Concept ID
+- Course ID
+- Concept title
+- Description
+- Lesson content
+- Optional video URL
+- Estimated lesson duration
+- Quiz information
+- Created and updated timestamps
+
+Instructors must be able to:
+
+1. Create courses.
+2. Add concepts to courses.
+3. Edit concept details.
+4. Attach text lessons.
+5. Attach video lesson links.
+6. Set estimated lesson duration.
+7. Create a quiz for each concept.
+8. Organize concepts through prerequisite relationships.
+
+Provide an intuitive course builder.
+
+### FEATURE 2: LEARNER ENROLLMENT AND PROGRESS
+
+Learners must be able to enroll in available courses.
+
+Implement:
+
+- Course enrollment.
+- Course progress dashboard.
+- Lesson access.
+- Lesson completion tracking.
+- Concept quiz history.
+- Mastery tracking.
+- Overall course completion percentage.
+
+Show progress visually using:
+
+- Progress bars.
+- Completed concept indicators.
+- Mastered concept indicators.
+- Locked concept indicators.
+- Available concept indicators.
+
+Progress must be stored in the database, not just in frontend state.
+
+When learners return to a course, their previous progress must be restored.
+
+### FEATURE 3: PREREQUISITE GRAPH EDITOR
+
+This is one of the most important features.
+
+Represent course concepts as nodes and prerequisite relationships as directed edges.
+
+For example:
+
+Variables → Conditions → Loops → Functions → Recursion
+
+If Concept B requires Concept A, represent the relationship as:
+
+A → B
+
+Create a visual graph editor for instructors.
+
+The editor must support:
+
+- Displaying all course concepts as nodes.
+- Displaying prerequisite relationships as directed edges.
+- Adding prerequisite links.
+- Removing prerequisite links.
+- Selecting a concept to view its details.
+- Highlighting connected prerequisites.
+- Showing dependent concepts.
+- Updating the graph after changes.
+
+**Cycle detection is mandatory.**
+
+The graph must remain a Directed Acyclic Graph (DAG).
+
+Reject any prerequisite link that creates a cycle.
+
+Example:
+
+If the existing relationships are:
+
+A → B → C
+
+An instructor must not be allowed to add:
+
+C → A
+
+Because this creates a cycle.
+
+When a cycle is detected:
+
+- Reject the relationship.
+- Do not save the invalid edge.
+- Display a clear explanation.
+- Show the cycle or path responsible for the conflict.
+
+Implement cycle detection using a reliable graph algorithm such as DFS or topological sorting.
+
+Do not rely only on frontend validation. Validate graph changes on the backend as well.
+
+### FEATURE 4: MASTERY-BASED UNLOCKING
+
+Every concept must have a short quiz.
+
+A concept should unlock only when all its prerequisites have been mastered.
+
+Implement:
+
+- Quiz questions.
+- Multiple-choice questions as the primary quiz type.
+- Answer submission.
+- Automatic scoring.
+- Configurable mastery threshold.
+- Quiz attempt history.
+- Mastery status.
+- Concept unlocking logic.
+
+Example:
+
+Suppose the mastery threshold is 70%.
+
+A learner scores:
+
+- Variables: 90% – Mastered.
+- Conditions: 80% – Mastered.
+- Loops: 55% – Not mastered.
+
+If Functions requires Loops, Functions must remain locked.
+
+The learner must be shown:
+
+"Functions is locked because you have not yet mastered Loops."
+
+Important rules:
+
+- Completing a lesson alone must not automatically count as mastering a concept.
+- Passing the quiz above the configured threshold establishes mastery.
+- All prerequisites must be mastered before a dependent concept unlocks.
+- If a learner fails a quiz, provide an option to retry.
+- Recalculate unlocking whenever quiz results or prerequisite relationships change.
+
+Locked concepts must clearly show which prerequisites are missing.
+
+### FEATURE 5: PERSONALIZED LEARNING PATH
+
+Learners must be able to choose any target concept in an enrolled course.
+
+The system must calculate the minimal ordered list of concepts they still need to master before reaching the selected target.
+
+Requirements:
+
+- Consider the prerequisite graph.
+- Identify all required ancestors of the target concept.
+- Skip concepts the learner has already mastered.
+- Return the remaining concepts in a valid prerequisite order.
+- Calculate estimated total learning time from lesson durations.
+- Display the learning path visually.
+- Update the path automatically when learner progress changes.
+
+Example:
+
+A learner wants to reach Recursion.
+
+The prerequisite chain is:
+
+Variables → Conditions → Loops → Functions → Recursion
+
+If the learner has already mastered Variables and Conditions, show:
+
+1. Loops
+2. Functions
+3. Recursion
+
+Do not ask the learner to repeat concepts already mastered.
+
+Display:
+
+- Target concept.
+- Remaining concepts.
+- Estimated total learning time.
+- Completed prerequisites.
+- Current learning position.
+
+If multiple valid prerequisite branches exist, calculate a minimal valid prerequisite route that includes all required dependencies. Explain the ordering clearly.
+
+Do not simply choose an arbitrary path if the target depends on multiple prerequisite branches.
+
+Use appropriate graph traversal and topological ordering algorithms.
+
+### FEATURE 6: LIVE CURRICULUM RESTRUCTURING AND HISTORY PRESERVATION
+
+This is another critical feature and should be demonstrated clearly.
+
+Instructors must be able to modify course structures while learners are actively enrolled.
+
+Supported changes include:
+
+1. Adding prerequisite links.
+2. Removing prerequisite links.
+3. Splitting a large concept into smaller concepts.
+
+The system must handle structural changes without losing existing learner progress or quiz results.
+
+#### A. Adding or removing prerequisite links
+
+When an instructor modifies graph relationships:
+
+- Validate the new graph.
+- Reject cycles.
+- Save valid structural changes.
+- Recalculate locked and unlocked concepts.
+- Recalculate personalized learning paths.
+- Identify affected learners.
+- Notify affected learners.
+- Preserve existing progress and quiz history.
+
+#### B. Splitting a large concept
+
+Support splitting a concept into smaller concepts.
+
+Example:
+
+Original concept:
+
+Advanced Functions
+
+After restructuring:
+
+- Function Parameters
+- Return Values
+- Function Scope
+
+The instructor must be able to:
+
+- Create the replacement concepts.
+- Define relationships between the new concepts.
+- Define how the old concept relates to the new structure.
+- Confirm the restructuring before applying it.
+
+Preserve the original concept's historical record.
+
+Do not automatically mark newly created concepts as mastered simply because the learner previously completed the original concept.
+
+Preserve previous quiz results and progress records, and define an explicit, transparent migration policy for the new concepts.
+
+Show the learner which concepts were introduced or changed.
+
+#### C. Automatic recalculation
+
+After curriculum restructuring:
+
+- Recalculate graph validity.
+- Recalculate concept unlocking.
+- Regenerate personalized learning paths.
+- Identify affected learners.
+- Generate notifications.
+- Record the change in curriculum history.
+
+#### D. Learner notifications
+
+Examples:
+
+- "Your course structure has been updated."
+- "A new prerequisite has been added before Functions."
+- "Your learning path to Recursion has changed."
+- "A concept has been divided into smaller learning sections."
+
+Maintain a curriculum change history showing:
+
+- Change ID.
+- Course ID.
+- Instructor.
+- Change type.
+- Previous graph structure.
+- Updated graph structure.
+- Timestamp.
+- Affected concepts.
+
+The system must preserve learner progress and quiz results throughout these operations.
+
+---
+
+## 5. GRAPH ALGORITHM REQUIREMENTS
+
+The graph engine is the heart of the application.
+
+Keep it independent of React components and API controllers.
+
+Implement separate functions for:
+
+1. Add concept.
+2. Remove concept safely.
+3. Add prerequisite edge.
+4. Remove prerequisite edge.
+5. Detect cycles.
+6. Validate DAG structure.
+7. Generate topological ordering.
+8. Identify prerequisite ancestors.
+9. Identify dependent concepts.
+10. Determine concept unlocking.
+11. Identify missing prerequisites.
+12. Calculate personalized learning paths.
+13. Calculate estimated learning time.
+14. Recalculate progress after graph updates.
+15. Identify learners affected by curriculum changes.
+
+Use appropriate algorithms such as:
+
+- Depth-First Search (DFS).
+- Topological Sorting.
+- Breadth-First Search (BFS), where appropriate.
+- Directed graph traversal.
+
+The graph engine must be testable independently.
+
+Do not implement graph logic only in the frontend.
+
+---
+
+## 6. SIMPLE, PROFESSIONAL USER INTERFACE
+
+The application must be designed for students and instructors who want a straightforward learning experience.
+
+### Design direction
+
+Create a modern EdTech SaaS interface.
+
+Suggested visual identity:
+
+- Primary: Deep indigo or blue.
+- Secondary: Soft violet.
+- Background: Warm white or light grey.
+- Text: Dark charcoal.
+- Accent: Subtle green for mastered concepts.
+- Warning: Amber for locked or incomplete concepts.
+
+Use:
+
+- Clean typography.
+- Rounded cards.
+- Consistent spacing.
+- Simple icons.
+- Clear visual hierarchy.
+- Responsive layouts.
+- Subtle animations.
+- Accessible color contrast.
+
+Avoid excessive gradients, unnecessary effects, and complicated navigation.
+
+### Main pages
+
+**1. Landing page**
+- Product introduction.
+- Explanation of prerequisite-based learning.
+- Instructor entry point.
+- Learner entry point.
+- Course discovery.
+- Language selector.
+
+**2. Authentication**
+- Register.
+- Login.
+- Role selection or role-aware account creation.
+- Clear validation.
+
+**3. Instructor dashboard**
+- Course overview.
+- Course creation.
+- Concept management.
+- Graph editor.
+- Quiz management.
+- Curriculum history.
+
+**4. Learner dashboard**
+- Enrolled courses.
+- Course progress.
+- Available learning activities.
+- Locked and unlocked concepts.
+- Personalized learning paths.
+- Notifications.
+
+**5. Course learning page**
+- Course concept graph.
+- Concept details.
+- Lesson content.
+- Video links.
+- Quiz.
+- Mastery status.
+
+**6. Curriculum restructuring page**
+- Visual graph.
+- Add/remove prerequisites.
+- Split concept workflow.
+- Change preview.
+- Confirmation.
+- History.
+
+### Learner-friendly UI rules
+
+- Avoid technical graph terminology in learner-facing screens.
+- Use understandable labels.
+- Show learners what to study next.
+- Explain why a topic is locked.
+- Make quiz submission simple.
+- Show clear success and failure feedback.
+- Keep navigation consistent.
+
+---
+
+## 7. MULTILINGUAL SUPPORT
+
+Implement three complete interface languages:
+
+1. English.
+2. Kannada (ಕನ್ನಡ).
+3. Hindi (हिन्दी).
+
+Provide a language selector in the main navigation.
+
+Requirements:
+
+- Translate navigation.
+- Translate buttons.
+- Translate course labels.
+- Translate lesson interface.
+- Translate quiz interface.
+- Translate validation messages.
+- Translate locked/unlocked status.
+- Translate progress messages.
+- Translate notifications.
+- Translate curriculum update explanations.
+
+Use separate translation files:
+
+client/src/locales/
+  en.json
+  kn.json
+  hi.json
+
+Use an internationalization library such as i18next.
+
+Do not hardcode visible interface text directly into components.
+
+Remember the user's selected language.
+
+Keep the original course content and instructor-authored lessons intact unless translations are explicitly provided. Do not pretend that all lesson content has been translated automatically.
+
+Use simple, natural Kannada and Hindi.
+
+---
+
+## 8. TECHNOLOGY STACK
+
+Use a beginner-friendly JavaScript architecture.
+
+Frontend:
+- React.
+- Vite.
+- JavaScript.
+- Tailwind CSS.
+- React Router.
+- Lucide React icons.
+- i18next.
+
+Graph visualization:
+- React Flow or another suitable graph visualization library.
+
+Backend:
+- Node.js.
+- Express.js.
+- REST API architecture.
+
+Database:
+- SQLite.
+- A lightweight database library or ORM.
+- Relational schema with foreign keys.
+
+Testing:
+- Vitest or Jest.
+- Supertest for backend APIs.
+- Unit tests for graph algorithms.
+
+Version control:
+- Git.
+- GitHub.
+
+Use free and open-source tools wherever possible.
+
+Do not make paid AI services mandatory for the application to run.
+
+---
+
+## 9. GITHUB-FRIENDLY PROJECT STRUCTURE
+
+Use a clean monorepo structure:
+
+project-name/
+│
+├── client/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── layouts/
+│   │   ├── pages/
+│   │   │   ├── auth/
+│   │   │   ├── instructor/
+│   │   │   └── learner/
+│   │   ├── graph/
+│   │   │   ├── components/
+│   │   │   └── utils/
+│   │   ├── hooks/
+│   │   ├── services/
+│   │   ├── context/
+│   │   ├── locales/
+│   │   │   ├── en.json
+│   │   │   ├── kn.json
+│   │   │   └── hi.json
+│   │   ├── utils/
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   └── package.json
+│
+├── server/
+│   ├── src/
+│   │   ├── config/
+│   │   ├── controllers/
+│   │   ├── routes/
+│   │   ├── middleware/
+│   │   ├── services/
+│   │   │   ├── courseService.js
+│   │   │   ├── conceptService.js
+│   │   │   ├── graphService.js
+│   │   │   ├── quizService.js
+│   │   │   ├── masteryService.js
+│   │   │   ├── learningPathService.js
+│   │   │   ├── curriculumService.js
+│   │   │   └── notificationService.js
+│   │   ├── database/
+│   │   │   ├── schema.sql
+│   │   │   ├── seed.js
+│   │   │   └── db.js
+│   │   ├── validators/
+│   │   ├── graph/
+│   │   └── app.js
+│   └── package.json
+│
+├── docs/
+│   ├── architecture.md
+│   ├── database-schema.md
+│   ├── graph-algorithms.md
+│   ├── api-documentation.md
+│   ├── curriculum-update-policy.md
+│   └── demo-guide.md
+│
+├── tests/
+│
+├── .env.example
+├── .gitignore
+├── package.json
+├── README.md
+└── LICENSE
+
+You may adjust the structure when technically necessary, but maintain clear separation between frontend, backend, graph logic, database, and documentation.
+
+Never commit:
+- node_modules.
+- .env files.
+- Passwords or secrets.
+- Temporary files.
+- Build caches.
+- Private learner information.
+
+---
+
+## 10. DATABASE DESIGN
+
+Design a relational database that supports course structures, graph relationships, learner progress, quizzes, and curriculum history.
+
+Required entities:
+
+### Users
+- id
+- name
+- email
+- password_hash
+- role
+- preferred_language
+- created_at
+
+### Courses
+- id
+- instructor_id
+- title
+- description
+- category
+- status
+- created_at
+- updated_at
+
+### Concepts
+- id
+- course_id
+- title
+- description
+- lesson_content
+- video_url
+- estimated_duration
+- status
+- created_at
+- updated_at
+
+### Prerequisites
+- id
+- course_id
+- prerequisite_concept_id
+- dependent_concept_id
+- created_at
+
+### Enrollments
+- id
+- learner_id
+- course_id
+- enrolled_at
+- status
+
+### LessonsProgress
+- id
+- learner_id
+- concept_id
+- completed
+- completed_at
+
+### Quizzes
+- id
+- concept_id
+- title
+- mastery_threshold
+- created_at
+
+### QuizQuestions
+- id
+- quiz_id
+- question
+- options
+- correct_answer
+- explanation
+
+### QuizAttempts
+- id
+- learner_id
+- quiz_id
+- score
+- passed
+- attempted_at
+
+### ConceptMastery
+- id
+- learner_id
+- concept_id
+- mastery_status
+- best_score
+- mastered_at
+- updated_at
+
+### CurriculumHistory
+- id
+- course_id
+- instructor_id
+- change_type
+- previous_structure
+- updated_structure
+- change_description
+- created_at
+
+### Notifications
+- id
+- user_id
+- course_id
+- message
+- read_status
+- created_at
+
+Use appropriate foreign keys, unique constraints, indexes, and relationships.
+
+Design the schema carefully so graph changes do not delete historical learner records.
+
+If concepts are split or retired, use a safe versioning or archival strategy rather than destructive deletion.
+
+---
+
+## 11. BACKEND API DESIGN
+
+Create documented REST endpoints.
+
+Authentication:
+- POST /api/auth/register
+- POST /api/auth/login
+- GET /api/auth/me
+
+Courses:
+- GET /api/courses
+- GET /api/courses/:id
+- POST /api/courses
+- PUT /api/courses/:id
+- DELETE /api/courses/:id
+
+Concepts:
+- GET /api/courses/:id/concepts
+- POST /api/courses/:id/concepts
+- PUT /api/concepts/:id
+- DELETE /api/concepts/:id
+
+Graph:
+- GET /api/courses/:id/graph
+- POST /api/graph/prerequisites
+- DELETE /api/graph/prerequisites/:id
+- POST /api/graph/validate
+
+Enrollment and progress:
+- POST /api/courses/:id/enroll
+- GET /api/learner/courses
+- GET /api/courses/:id/progress
+- PATCH /api/lessons/:id/complete
+
+Quizzes and mastery:
+- GET /api/concepts/:id/quiz
+- POST /api/quizzes/:id/attempt
+- GET /api/concepts/:id/mastery
+
+Learning path:
+- GET /api/courses/:id/learning-path/:targetConceptId
+
+Curriculum changes:
+- POST /api/curriculum/split-concept
+- GET /api/courses/:id/history
+- POST /api/curriculum/recalculate
+
+Notifications:
+- GET /api/notifications
+- PATCH /api/notifications/:id/read
+
+Implement role-based authorization, input validation, and consistent error responses.
+
+All graph validation and mastery checks must be performed on the backend.
+
+---
+
+## 12. SAMPLE COURSE AND DEMO DATA
+
+The problem statement requires at least one meaningful sample course containing 12 or more concepts.
+
+Create a sample course:
+
+**Course Name: Programming Fundamentals to Advanced Concepts**
+
+Include at least these 15 concepts:
+
+1. Introduction to Programming
+2. Variables
+3. Data Types
+4. Operators
+5. Conditional Statements
+6. Loops
+7. Functions
+8. Function Parameters
+9. Return Values
+10. Arrays
+11. Strings
+12. Recursion
+13. Pointers
+14. Data Structures
+15. Algorithms
+
+Define sensible prerequisite relationships.
+
+For example:
+
+Introduction to Programming
+    ├── Variables
+    │     ├── Data Types
+    │     └── Operators
+    ├── Conditional Statements
+    └── Loops
+
+Variables + Data Types → Functions
+
+Functions → Function Parameters
+
+Functions → Return Values
+
+Variables + Loops → Arrays
+
+Variables + Arrays → Strings
+
+Functions + Loops → Recursion
+
+Variables + Data Types → Pointers
+
+Arrays + Pointers → Data Structures
+
+Functions + Data Structures → Algorithms
+
+Review the final graph to ensure it is a valid DAG and that the relationships make educational sense.
+
+Create quizzes for every concept.
+
+Include:
+- At least one instructor account.
+- At least three learner accounts.
+- Realistic quiz questions.
+- Different learner mastery states.
+- Some locked concepts.
+- Some unlocked concepts.
+- Different learning-path scenarios.
+
+The sample data must allow judges to demonstrate the application immediately.
+
+---
+
+## 13. LIVE DEMONSTRATION SCENARIOS
+
+Prepare three complete demo scenarios.
+
+### SCENARIO 1: Normal Learning and Mastery
+
+1. Learner opens the sample programming course.
+2. Learner views the concept graph.
+3. Learner sees which concepts are unlocked.
+4. Learner opens Variables.
+5. Learner studies the lesson.
+6. Learner completes the quiz.
+7. System calculates the score.
+8. If the score meets the mastery threshold, Variables becomes mastered.
+9. Dependent concepts become available when all their prerequisites are mastered.
+
+Demonstrate that advanced concepts cannot be accessed before prerequisites are mastered.
+
+### SCENARIO 2: Personalized Learning Path
+
+1. Learner selects Algorithms as the target concept.
+2. System analyzes the prerequisite graph.
+3. System identifies the required concepts.
+4. System skips concepts already mastered.
+5. System displays the remaining concepts in valid order.
+6. System calculates estimated total learning time.
+7. Learner completes another concept.
+8. System automatically updates the learning path.
+
+### SCENARIO 3: Live Curriculum Restructuring
+
+1. Instructor opens the graph editor.
+2. Instructor adds a new prerequisite relationship.
+3. System checks whether the new edge creates a cycle.
+4. A valid change is accepted.
+5. An invalid change is rejected with an explanation.
+6. System recalculates affected learner unlocking states.
+7. System regenerates learning paths.
+8. System identifies affected learners.
+9. Notifications are generated.
+10. Previous learner progress and quiz results remain preserved.
+
+Also demonstrate splitting a large concept into smaller concepts and show how historical records and learner progress are handled.
+
+---
+
+## 14. AI DEVELOPMENT TOOLS WORKFLOW
+
+Use the tools efficiently and maintain one shared codebase.
+
+### Google Stitch – UI/UX
+
+Use Stitch to design:
+
+- Landing page.
+- Instructor dashboard.
+- Learner dashboard.
+- Course page.
+- Concept graph editor.
+- Quiz interface.
+- Personalized learning path.
+- Curriculum history page.
+
+Design mobile-first interfaces and maintain one consistent design system.
+
+Convert the approved designs into reusable React components.
+
+### Antigravity – Main Coding Agent
+
+Use Antigravity as the main development environment.
+
+Responsibilities:
+
+- Analyze the project requirements.
+- Design the architecture.
+- Generate the project structure.
+- Build the frontend.
+- Build the backend.
+- Implement database integration.
+- Implement graph algorithms.
+- Connect frontend and backend.
+- Run the application.
+- Test using browser and terminal tools.
+- Debug errors.
+- Review changes before accepting them.
+
+Do not create disconnected codebases or overwrite working functionality.
+
+### Google AI Studio – Optional AI Assistance
+
+Use Google AI Studio only for optional experiments such as:
+
+- Generating explanations of difficult concepts.
+- Drafting educational lesson content.
+- Assisting with translation drafts.
+
+Do not make AI responsible for:
+- Graph cycle detection.
+- Mastery calculations.
+- Prerequisite validation.
+- Unlocking decisions.
+- Shortest valid learning-path computation.
+- Curriculum data integrity.
+
+These must use deterministic backend logic.
+
+Do not expose API keys in frontend code or GitHub.
+
+The application must remain fully functional without a paid AI service.
+
+### VS Code – Manual Development and Debugging
+
+Use VS Code for:
+
+- Inspecting generated code.
+- Editing components.
+- Debugging.
+- Running terminal commands.
+- Reviewing Git changes.
+- Testing.
+- Resolving integration conflicts.
+
+---
+
+## 15. FOUR-MEMBER TEAM DIVISION
+
+The project is being developed by four beginner-level team members.
+
+Divide responsibilities clearly.
+
+### Member 1 – Team Lead and Backend
+
+- Project setup.
+- Database schema.
+- Authentication.
+- Course and concept APIs.
+- Integration.
+- GitHub main branch management.
+
+### Member 2 – Learner Frontend
+
+- Learner dashboard.
+- Course browsing.
+- Enrollment.
+- Lesson interface.
+- Quiz interface.
+- Progress visualization.
+
+### Member 3 – Instructor Frontend
+
+- Instructor dashboard.
+- Course management.
+- Concept management.
+- Graph editor interface.
+- Quiz creation.
+- Curriculum history interface.
+
+### Member 4 – Graph Logic and Testing
+
+- Graph data structures.
+- Cycle detection.
+- Topological sorting.
+- Unlocking logic.
+- Personalized learning paths.
+- Curriculum restructuring tests.
+- Demo data and presentation.
+
+Coordinate the graph API and data model before parallel implementation.
+
+Use feature branches and reviewed merges. Avoid multiple people editing the same files without coordination.
+
+---
+
+## 16. 12-HOUR HACKATHON DEVELOPMENT PLAN
+
+Hour 1:
+- Confirm architecture.
+- Create GitHub repository.
+- Initialize frontend and backend.
+- Create database schema.
+
+Hours 2–3:
+- Create landing page.
+- Build instructor and learner dashboards.
+- Implement basic navigation.
+- Create sample course structure.
+
+Hours 4–5:
+- Implement course and concept management.
+- Implement enrollment.
+- Implement lesson and quiz APIs.
+- Connect frontend and backend.
+
+Hours 6–7:
+- Implement graph data model.
+- Implement prerequisite relationships.
+- Implement cycle detection.
+- Implement mastery-based unlocking.
+
+Hours 8–9:
+- Implement personalized learning paths.
+- Implement estimated learning time.
+- Implement curriculum restructuring.
+- Implement history preservation and notifications.
+
+Hour 10:
+- Integrate all modules.
+- Implement language switching.
+- Fix frontend/backend issues.
+
+Hour 11:
+- Test graph logic.
+- Test learner workflows.
+- Test curriculum restructuring.
+- Fix critical bugs.
+
+Hour 12:
+- Prepare final demonstration.
+- Verify README.
+- Verify GitHub repository.
+- Prepare presentation and architecture explanation.
+
+Prioritize all six mandatory problem features over optional enhancements.
+
+---
+
+## 17. TESTING AND VALIDATION
+
+The following tests are mandatory.
+
+Course management:
+- Instructor can create a course.
+- Instructor can add concepts.
+- Instructor can attach text lessons and video links.
+- Instructor can edit concepts.
+
+Enrollment:
+- Learner can enroll in a course.
+- Learner can access available lessons.
+- Progress is persisted.
+
+Graph:
+- Concepts display correctly.
+- Prerequisite links display correctly.
+- Valid edges are accepted.
+- Cycle-producing edges are rejected.
+- Clear cycle explanations are shown.
+
+Mastery:
+- Quiz scores are calculated correctly.
+- Threshold is configurable.
+- A concept unlocks only after all prerequisites are mastered.
+- Locked concepts show missing prerequisites.
+
+Learning path:
+- Target concept can be selected.
+- Required prerequisites are identified.
+- Already mastered concepts are skipped.
+- Concepts are ordered correctly.
+- Estimated learning time is correct.
+- Path updates after progress changes.
+
+Curriculum restructuring:
+- Prerequisite links can be added and removed.
+- Concepts can be split.
+- Existing progress is preserved.
+- Quiz history is preserved.
+- Unlocking is recalculated.
+- Learning paths are regenerated.
+- Affected learners receive notifications.
+- Curriculum history is recorded.
+
+Multilingual:
+- English works.
+- Kannada works.
+- Hindi works.
+- Language selection persists.
+- No major interface text remains untranslated.
+
+Do not mark a feature complete simply because its page or button exists. Verify the underlying functionality.
+
+---
+
+## 18. GITHUB AND README REQUIREMENTS
+
+Create a professional GitHub repository.
+
+The README must contain:
+
+- Project title.
+- Problem statement.
+- Problem explanation.
+- Proposed solution.
+- Main features.
+- Technology stack.
+- Architecture diagram.
+- Database design.
+- Graph algorithm explanation.
+- Installation instructions.
+- Environment variables.
+- Database setup.
+- Demo accounts.
+- Run commands.
+- Test commands.
+- Screenshots.
+- Team contributions.
+- Known limitations.
+- Future enhancements.
+
+Include a useful .gitignore and .env.example.
+
+Make the repository easy for another developer to clone, install, and run.
+
+Use meaningful commit messages and organized branches.
+
+Do not commit secrets or private learner data.
+
+---
+
+## 19. STRICT DEVELOPMENT RULES
+
+1. Build a fully functional application, not just a UI prototype.
+2. Do not use fake buttons.
+3. Do not hardcode graph results as if they were computed.
+4. Do not implement cycle detection only on the frontend.
+5. Do not unlock concepts without verifying every prerequisite.
+6. Do not lose learner progress when a graph changes.
+7. Do not delete quiz history during curriculum restructuring.
+8. Do not use AI for critical graph or mastery decisions.
+9. Do not introduce unnecessary complexity.
+10. Do not add paid services as mandatory dependencies.
+11. Do not remove working functionality during later development.
+12. Keep the code modular and understandable for beginners.
+13. Handle loading, empty, success, and error states.
+14. Test all critical logic.
+15. Keep the repository GitHub-friendly.
+
+---
+
+## 20. FIRST ACTION – PLAN BEFORE CODING
+
+Before generating any code:
+
+1. Read and analyze the complete problem statement.
+2. Identify all six mandatory features.
+3. Explain the architecture.
+4. Design the database.
+5. Explain the graph model.
+6. Explain cycle detection.
+7. Explain mastery-based unlocking.
+8. Explain personalized learning-path calculation.
+9. Explain curriculum restructuring and progress preservation.
+10. Propose the complete UI screen structure.
+11. Propose API endpoints.
+12. Create the folder structure.
+13. Divide the work among four team members.
+14. Identify risks within the 12-hour time limit.
+
+Present the plan in beginner-friendly language.
+
+Then implement the project phase by phase.
+
+After every phase:
+
+- Explain what was built.
+- List the files created or modified.
+- Run relevant tests.
+- Verify the feature.
+- Report remaining issues.
+- Ensure the application still runs.
+
+Do not generate the entire application in one uncontrolled operation.
+
+---
+
+## FINAL SUCCESS CRITERIA
+
+The application must demonstrate this complete workflow:
+
+An instructor creates a course → adds concepts and lessons → defines prerequisite relationships → the graph editor validates the structure → a learner enrolls → studies lessons → attempts quizzes → proves mastery → unlocks dependent concepts → selects a target concept → receives a personalized learning path → the instructor restructures the curriculum → the system recalculates paths and unlocking → affected learners receive notifications → all previous progress and quiz results remain preserved.
+
+The final product must be:
+
+- Functionally complete against all six mandatory requirements.
+- Easy for learners and instructors to use.
+- Visually professional.
+- Technically reliable.
+- Responsive on mobile and desktop.
+- Available in English, Kannada, and Hindi.
+- Easy to maintain.
+- Organized for GitHub collaboration.
+- Ready for a smooth hackathon demonstration.
+
+**Build a real prerequisite-aware learning platform, not another ordinary online course website.**
