@@ -164,12 +164,12 @@ export function Explore3DPage() {
     [user]
   );
 
-  const getInspectedForScene = (id: ExploreSceneId): string[] => {
+  const activeInspectedParts = useMemo(() => {
     const serverParts =
-      profile?.exploreProgress.find((e) => e.sceneId === id)?.inspectedParts || [];
-    const localParts = guestInspected[id] || [];
+      profile?.exploreProgress.find((e) => e.sceneId === activeLab.id)?.inspectedParts || [];
+    const localParts = guestInspected[activeLab.id] || [];
     return Array.from(new Set([...serverParts, ...localParts]));
-  };
+  }, [activeLab.id, profile, guestInspected]);
 
   const completedLabsCount = useMemo(() => {
     if (!profile) return 0;
@@ -350,7 +350,7 @@ export function Explore3DPage() {
           sceneId={activeLab.id}
           title={activeLab.title}
           minPartsRequired={activeLab.minPartsRequired}
-          initialInspectedParts={getInspectedForScene(activeLab.id)}
+          initialInspectedParts={activeInspectedParts}
           onPartsInspected={handlePartsInspected}
         />
       </section>

@@ -78,8 +78,15 @@ export function ThreeViewport({
   const [actions, setActions] = useState<ExploreSceneAction[]>([]);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [inspectedParts, setInspectedParts] = useState<string[]>(initialInspectedParts);
+  const inspectedPartsRef = useRef<string[]>(initialInspectedParts);
+  const onPartsInspectedRef = useRef(onPartsInspected);
 
   useEffect(() => {
+    onPartsInspectedRef.current = onPartsInspected;
+  }, [onPartsInspected]);
+
+  useEffect(() => {
+    inspectedPartsRef.current = initialInspectedParts;
     setInspectedParts(initialInspectedParts);
   }, [sceneId, initialInspectedParts]);
 
@@ -94,12 +101,13 @@ export function ThreeViewport({
   const markInspected = (partId: string) => {
     setSelectedPartId(partId);
     controllerRef.current?.setSelectedPart(partId);
-    setInspectedParts((prev) => {
-      if (prev.includes(partId)) return prev;
-      const next = [...prev, partId];
-      onPartsInspected(sceneId, next);
-      return next;
-    });
+    const current = inspectedPartsRef.current;
+    if (!current.includes(partId)) {
+      const next = [...current, partId];
+      inspectedPartsRef.current = next;
+      setInspectedParts(next);
+      onPartsInspectedRef.current(sceneId, next);
+    }
   };
 
   useEffect(() => {
@@ -133,12 +141,14 @@ export function ThreeViewport({
       setPresets([...controller.presets]);
       setActions(controller.getActions ? controller.getActions() : []);
       setSelectedPartId(controller.defaultSelectedId);
-      setInspectedParts((prev) => {
-        if (prev.includes(controller.defaultSelectedId)) return prev;
-        const next = [...prev, controller.defaultSelectedId];
-        onPartsInspected(sceneId, next);
-        return next;
-      });
+
+      const currentInspected = inspectedPartsRef.current;
+      if (!currentInspected.includes(controller.defaultSelectedId)) {
+        const nextInspected = [...currentInspected, controller.defaultSelectedId];
+        inspectedPartsRef.current = nextInspected;
+        setInspectedParts(nextInspected);
+        onPartsInspectedRef.current(sceneId, nextInspected);
+      }
 
       if (!probe.supported) {
         controller.dispose();
