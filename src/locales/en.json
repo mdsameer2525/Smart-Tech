@@ -75,7 +75,17 @@
     "errorRequired": "Please complete all required fields.",
     "errorEmail": "Please enter a valid email address.",
     "errorPasswordLength": "Password must be at least 6 characters.",
-    "errorGeneric": "Authentication failed. Please check your credentials."
+    "errorGeneric": "Authentication failed. Please check your credentials.",
+    "googleSignIn": "Sign in with Google",
+    "googleSignUp": "Sign up with Google",
+    "orContinueWithEmail": "or continue with email",
+    "googleSignupStepTitle": "Finish your Google Sign-Up",
+    "googleSignupStepHint": "Choose how you want to use Smart-Tech with your verified Google account.",
+    "googleCompleteBtn": "Create Account & Continue",
+    "googleCancelBtn": "Back to Sign In",
+    "googlePopupClosed": "Google sign-in popup was closed before completing.",
+    "googlePopupBlocked": "Your browser blocked the sign-in popup. Please allow popups for this site and try again.",
+    "googleAuthFailed": "Unable to complete Google authentication. Please try again."
   },
   "status": {
     "mastered": "Mastered",

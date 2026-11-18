@@ -4,6 +4,7 @@ import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app.ts';
 import { seedDatabaseIfEmpty } from '../server/database/seed.ts';
+import { setFirebaseTokenVerifierForTesting } from '../server/services/firebaseAuth.ts';
 
 let db: Database.Database;
 let serverUrl = '';
@@ -239,6 +240,93 @@ describe('Smart-Tech Backend API Integration', () => {
 
     const deleteOwn = await api(`/courses/${ownCourseId}`, { method: 'DELETE' }, inst2Token);
     expect(deleteOwn.status).toBe(200);
+  });
+
+  it('supports Google Sign-In, role-aware Google Sign-Up, and token/verification enforcement', async () => {
+    setFirebaseTokenVerifierForTesting(async (idToken) => {
+      if (idToken === 'valid-new-google-token') {
+        return {
+          uid: 'google-uid-new-101',
+          email: 'kavya.google@smarttech.edu',
+          emailVerified: true,
+          name: 'Kavya Google',
+          picture: 'https://example.com/avatar.png',
+        };
+      }
+      if (idToken === 'unverified-google-token') {
+        return {
+          uid: 'google-uid-unverified',
+          email: 'unverified@smarttech.edu',
+          emailVerified: false,
+          name: 'Unverified User',
+          picture: null,
+        };
+      }
+      throw new Error('Invalid token');
+    });
+
+    try {
+      // 1. Missing token -> 400
+      const missingRes = await api('/auth/google', { method: 'POST', body: JSON.stringify({}) });
+      expect(missingRes.status).toBe(400);
+
+      // 2. Invalid token -> 401
+      const invalidRes = await api('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken: 'bad-token' }),
+      });
+      expect(invalidRes.status).toBe(401);
+
+      // 3. Unverified Google email -> 403
+      const unverifiedRes = await api('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken: 'unverified-google-token', confirmSignup: true }),
+      });
+      expect(unverifiedRes.status).toBe(403);
+
+      // 4. New Google user from Sign-In tab -> needsRegistration: true
+      const promptRoleRes = await api('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken: 'valid-new-google-token', confirmSignup: false }),
+      });
+      expect(promptRoleRes.status).toBe(200);
+      expect(promptRoleRes.data.needsRegistration).toBe(true);
+      expect(promptRoleRes.data.googleProfile.email).toBe('kavya.google@smarttech.edu');
+
+      // 5. Complete Google Sign-Up as instructor -> 201 + JWT + user
+      const signupRes = await api('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({
+          idToken: 'valid-new-google-token',
+          role: 'instructor',
+          preferred_language: 'kn',
+          confirmSignup: true,
+        }),
+      });
+      expect(signupRes.status).toBe(201);
+      expect(signupRes.data.isNewUser).toBe(true);
+      expect(signupRes.data.user.role).toBe('instructor');
+      expect(signupRes.data.user.auth_provider).toBe('google');
+      expect(signupRes.data.token).toBeTruthy();
+
+      // 6. Returning Google Sign-In logs directly in without recreating account
+      const returningRes = await api('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken: 'valid-new-google-token', confirmSignup: false }),
+      });
+      expect(returningRes.status).toBe(200);
+      expect(returningRes.data.isNewUser).toBe(false);
+      expect(returningRes.data.user.id).toBe(signupRes.data.user.id);
+
+      // 7. Password login on Google-only account is rejected cleanly
+      const pwAttempt = await api('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'kavya.google@smarttech.edu', password: 'demo123' }),
+      });
+      expect(pwAttempt.status).toBe(401);
+    } finally {
+      setFirebaseTokenVerifierForTesting(null);
+    }
   });
 });
 

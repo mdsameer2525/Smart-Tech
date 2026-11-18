@@ -24,6 +24,7 @@ import {
   loadCourseGraph,
   splitConceptInCourse,
 } from '../services/curriculumService.ts';
+import { verifyFirebaseGoogleToken } from '../services/firebaseAuth.ts';
 
 function parsePositiveInt(value: unknown): number | null {
   const n = Number(value);
@@ -113,13 +114,17 @@ export function createApiRouter(db: Database.Database): Router {
       .run(name.trim(), email.trim().toLowerCase(), hash, safeRole, safeLang);
 
     const user = db
-      .prepare('SELECT id, name, email, role, preferred_language, created_at FROM users WHERE id = ?')
+      .prepare(
+        'SELECT id, name, email, role, preferred_language, auth_provider, avatar_url, created_at FROM users WHERE id = ?'
+      )
       .get(Number(result.lastInsertRowid)) as {
       id: number;
       name: string;
       email: string;
       role: 'instructor' | 'learner';
       preferred_language: 'en' | 'kn' | 'hi';
+      auth_provider: 'local' | 'google';
+      avatar_url: string | null;
       created_at: string;
     };
 
@@ -135,7 +140,9 @@ export function createApiRouter(db: Database.Database): Router {
     }
 
     const row = db
-      .prepare('SELECT id, name, email, password_hash, role, preferred_language FROM users WHERE email = ?')
+      .prepare(
+        'SELECT id, name, email, password_hash, role, preferred_language, auth_provider, avatar_url FROM users WHERE email = ?'
+      )
       .get(email.trim().toLowerCase()) as
       | {
           id: number;
@@ -144,10 +151,24 @@ export function createApiRouter(db: Database.Database): Router {
           password_hash: string;
           role: 'instructor' | 'learner';
           preferred_language: 'en' | 'kn' | 'hi';
+          auth_provider: 'local' | 'google';
+          avatar_url: string | null;
         }
       | undefined;
 
-    if (!row || !bcrypt.compareSync(password, row.password_hash)) {
+    if (!row) {
+      res.status(401).json({ error: 'Invalid email or password.' });
+      return;
+    }
+
+    if (row.auth_provider === 'google' && !row.password_hash.startsWith('$2')) {
+      res.status(401).json({
+        error: 'This account uses Google Sign-In. Please click "Sign in with Google".',
+      });
+      return;
+    }
+
+    if (!bcrypt.compareSync(password, row.password_hash)) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
     }
@@ -158,14 +179,122 @@ export function createApiRouter(db: Database.Database): Router {
       email: row.email,
       role: row.role,
       preferred_language: row.preferred_language,
+      auth_provider: row.auth_provider,
+      avatar_url: row.avatar_url,
     };
     const token = signToken(user);
     res.json({ token, user });
   });
 
+  router.post('/auth/google', authLimiter, async (req, res) => {
+    const { idToken, role, preferred_language, confirmSignup } = req.body ?? {};
+    if (!idToken || typeof idToken !== 'string' || !idToken.trim()) {
+      res.status(400).json({ error: 'Google ID token is required.' });
+      return;
+    }
+
+    let profile;
+    try {
+      profile = await verifyFirebaseGoogleToken(idToken.trim());
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired Google sign-in token. Please try again.' });
+      return;
+    }
+
+    if (!profile.emailVerified) {
+      res.status(403).json({ error: 'Your Google account email must be verified to continue.' });
+      return;
+    }
+
+    const existing = db
+      .prepare(
+        'SELECT id, name, email, role, preferred_language, auth_provider, google_uid, avatar_url FROM users WHERE google_uid = ? OR email = ?'
+      )
+      .get(profile.uid, profile.email) as
+      | {
+          id: number;
+          name: string;
+          email: string;
+          role: 'instructor' | 'learner';
+          preferred_language: 'en' | 'kn' | 'hi';
+          auth_provider: 'local' | 'google';
+          google_uid: string | null;
+          avatar_url: string | null;
+        }
+      | undefined;
+
+    if (existing) {
+      const nextAvatar = profile.picture ?? existing.avatar_url;
+      if (existing.google_uid !== profile.uid || nextAvatar !== existing.avatar_url) {
+        db.prepare('UPDATE users SET google_uid = ?, avatar_url = ? WHERE id = ?').run(
+          profile.uid,
+          nextAvatar,
+          existing.id
+        );
+      }
+
+      const user = {
+        id: existing.id,
+        name: existing.name,
+        email: existing.email,
+        role: existing.role,
+        preferred_language: existing.preferred_language,
+        auth_provider: existing.auth_provider,
+        avatar_url: nextAvatar,
+      };
+      const token = signToken(user);
+      res.json({ token, user, isNewUser: false });
+      return;
+    }
+
+    if (confirmSignup !== true) {
+      res.json({
+        needsRegistration: true,
+        googleProfile: {
+          name: profile.name,
+          email: profile.email,
+          avatar_url: profile.picture,
+        },
+      });
+      return;
+    }
+
+    const safeRole = role === 'instructor' ? 'instructor' : 'learner';
+    const safeLang =
+      preferred_language === 'kn' || preferred_language === 'hi' ? preferred_language : 'en';
+    const safeName = profile.name.trim().slice(0, 100) || 'Smart-Tech Learner';
+
+    const insertRes = db
+      .prepare(
+        `INSERT INTO users (name, email, password_hash, role, preferred_language, auth_provider, google_uid, avatar_url)
+         VALUES (?, ?, '!google-oauth-account!', ?, ?, 'google', ?, ?)`
+      )
+      .run(safeName, profile.email, safeRole, safeLang, profile.uid, profile.picture);
+
+    const createdUser = db
+      .prepare(
+        'SELECT id, name, email, role, preferred_language, auth_provider, avatar_url, created_at FROM users WHERE id = ?'
+      )
+      .get(Number(insertRes.lastInsertRowid)) as {
+      id: number;
+      name: string;
+      email: string;
+      role: 'instructor' | 'learner';
+      preferred_language: 'en' | 'kn' | 'hi';
+      auth_provider: 'local' | 'google';
+      avatar_url: string | null;
+      created_at: string;
+    };
+
+    const token = signToken(createdUser);
+    res.status(201).json({ token, user: createdUser, isNewUser: true });
+  });
+
   router.get('/auth/me', requireAuth, (req: AuthenticatedRequest, res) => {
     const user = db
-      .prepare('SELECT id, name, email, role, preferred_language, created_at FROM users WHERE id = ?')
+      .prepare(
+        'SELECT id, name, email, role, preferred_language, auth_provider, avatar_url, created_at FROM users WHERE id = ?'
+      )
       .get(req.user!.id);
     if (!user) {
       res.status(404).json({ error: 'User not found.' });

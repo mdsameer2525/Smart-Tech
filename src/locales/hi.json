@@ -75,7 +75,17 @@
     "errorRequired": "कृपया सभी आवश्यक फ़ील्ड भरें।",
     "errorEmail": "कृपया एक मान्य ईमेल पता दर्ज करें।",
     "errorPasswordLength": "पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।",
-    "errorGeneric": "प्रमाणीकरण विफल रहा। कृपया अपना विवरण जांचें।"
+    "errorGeneric": "प्रमाणीकरण विफल रहा। कृपया अपना विवरण जांचें।",
+    "googleSignIn": "Google से साइन इन करें",
+    "googleSignUp": "Google से साइन अप करें",
+    "orContinueWithEmail": "या ईमेल से जारी रखें",
+    "googleSignupStepTitle": "अपना Google साइन-अप पूरा करें",
+    "googleSignupStepHint": "अपने सत्यापित Google खाते के लिए Smart-Tech भूमिका चुनें।",
+    "googleCompleteBtn": "खाता बनाएं और जारी रखें",
+    "googleCancelBtn": "साइन इन पर वापस जाएं",
+    "googlePopupClosed": "प्रक्रिया पूरी होने से पहले Google साइन-इन पॉप-अप बंद हो गया।",
+    "googlePopupBlocked": "आपके ब्राउज़र ने पॉप-अप ब्लॉक कर दिया है। कृपया पॉप-अप की अनुमति देकर पुनः प्रयास करें।",
+    "googleAuthFailed": "Google प्रमाणीकरण पूरा नहीं हो सका। कृपया पुनः प्रयास करें।"
   },
   "status": {
     "mastered": "महारत प्राप्त",

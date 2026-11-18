@@ -18,6 +18,22 @@ export function getDb(customPath?: string): Database.Database {
   const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
   db.exec(schemaSql);
 
+  const userColumns = new Set(
+    (db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map((c) => c.name)
+  );
+  if (!userColumns.has('auth_provider')) {
+    db.exec("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'local'");
+  }
+  if (!userColumns.has('google_uid')) {
+    db.exec('ALTER TABLE users ADD COLUMN google_uid TEXT DEFAULT NULL');
+  }
+  if (!userColumns.has('avatar_url')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT NULL');
+  }
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_uid ON users(google_uid) WHERE google_uid IS NOT NULL'
+  );
+
   if (!customPath) {
     dbInstance = db;
   }

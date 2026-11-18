@@ -95,9 +95,17 @@ export function Navbar() {
             <div className="flex items-center gap-3">
               <Link
                 to={user.role === 'instructor' ? '/instructor' : '/learner'}
-                className="text-sm font-medium text-slate-700 hover:text-indigo-700 whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-indigo-700 whitespace-nowrap shrink-0"
               >
-                {user.name}
+                {user.avatar_url && (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-6 h-6 rounded-full border border-slate-200 object-cover"
+                  />
+                )}
+                <span>{user.name}</span>
               </Link>
               <button
                 type="button"
