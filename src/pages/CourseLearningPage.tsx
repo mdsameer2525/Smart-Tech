@@ -17,7 +17,17 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ConceptGraphCanvas } from '../graph/ConceptGraphCanvas';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { ApiError, apiRequest } from '../services/api';
+
+function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 interface ConceptProgressItem {
   id: number;
@@ -104,7 +114,8 @@ interface RetiredRecord {
 
 export function CourseLearningPage() {
   const { courseId } = useParams();
-  const cid = Number(courseId || 1);
+  const parsedCid = Number(courseId);
+  const cid = Number.isInteger(parsedCid) && parsedCid > 0 ? parsedCid : 0;
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -131,12 +142,27 @@ export function CourseLearningPage() {
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
+  const [completingLesson, setCompletingLesson] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
   const [actionError, setActionError] = useState('');
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
 
+  useDocumentMeta({
+    title: courseTitle ? `${courseTitle} — Smart-Tech` : 'Course — Smart-Tech',
+    description: courseDesc || 'Interactive prerequisite concept graph and mastery quiz.',
+    canonicalPath: cid ? `/learn/${cid}` : undefined,
+  });
+
   const fetchCourseState = useCallback(async () => {
+    if (!cid) {
+      setLoadError(t('courseLearn.courseNotFoundHint'));
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setLoadError('');
     try {
       if (user) {
         const res = await apiRequest<{
@@ -207,12 +233,16 @@ export function CourseLearningPage() {
         setConcepts(mapped);
         setEdges(res.edges);
         setTotalCount(mapped.length);
-        setSelectedConceptId(mapped[0]?.id ?? null);
+        setSelectedConceptId((prev) =>
+          prev && mapped.some((c) => c.id === prev) ? prev : mapped[0]?.id ?? null
+        );
       }
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : t('courseLearn.courseNotFoundHint'));
     } finally {
       setLoading(false);
     }
-  }, [cid, user]);
+  }, [cid, user, t]);
 
   useEffect(() => {
     fetchCourseState();
@@ -279,12 +309,21 @@ export function CourseLearningPage() {
       navigate('/auth');
       return;
     }
-    await apiRequest(`/courses/${cid}/enroll`, { method: 'POST' });
-    await fetchCourseState();
+    setEnrolling(true);
+    setActionError('');
+    try {
+      await apiRequest(`/courses/${cid}/enroll`, { method: 'POST' });
+      await fetchCourseState();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : t('common.error'));
+    } finally {
+      setEnrolling(false);
+    }
   };
 
   const handleCompleteLesson = async () => {
-    if (!selectedConcept || !user) return;
+    if (!selectedConcept || !user || completingLesson) return;
+    setCompletingLesson(true);
     setActionError('');
     try {
       await apiRequest(`/lessons/${selectedConcept.id}/complete`, { method: 'PATCH' });
@@ -294,11 +333,22 @@ export function CourseLearningPage() {
       setActionMsg(t('courseLearn.lessonCompleted'));
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : t('common.error'));
+    } finally {
+      setCompletingLesson(false);
     }
   };
 
+  const answeredCount = useMemo(
+    () => quizQuestions.filter((_, idx) => selectedAnswers[idx] !== undefined).length,
+    [quizQuestions, selectedAnswers]
+  );
+
   const handleSubmitQuiz = async () => {
-    if (!selectedConcept?.quizId || !user) return;
+    if (!selectedConcept?.quizId || !user || submittingQuiz) return;
+    if (answeredCount < quizQuestions.length) {
+      setActionError(t('courseLearn.unansweredWarning', { total: quizQuestions.length }));
+      return;
+    }
     setSubmittingQuiz(true);
     setActionError('');
     try {
@@ -335,6 +385,35 @@ export function CourseLearningPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold text-slate-900">
+            {t('courseLearn.courseNotFound')}
+          </h1>
+          <p className="text-sm text-slate-600">{loadError}</p>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {t('notFound.backHome')}
+            </Link>
+            <button
+              type="button"
+              onClick={fetchCourseState}
+              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       {/* Header & Progress Bar */}
@@ -355,10 +434,11 @@ export function CourseLearningPage() {
           {!enrolled && (
             <button
               type="button"
+              disabled={enrolling}
               onClick={handleEnroll}
-              className="px-4 py-2.5 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer shrink-0"
+              className="px-4 py-2.5 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
             >
-              {user ? t('learner.enrollNow') : t('nav.signIn')}
+              {enrolling ? t('common.loading') : user ? t('learner.enrollNow') : t('nav.signIn')}
             </button>
           )}
         </div>
@@ -749,7 +829,7 @@ export function CourseLearningPage() {
                   </div>
                 </div>
 
-                {selectedConcept.video_url && (
+                {selectedConcept.video_url && isSafeHttpUrl(selectedConcept.video_url) && (
                   <div className="p-4 rounded-lg border border-slate-200 bg-white flex items-center justify-between gap-4">
                     <div>
                       <div className="text-xs font-semibold text-slate-700">
@@ -762,7 +842,7 @@ export function CourseLearningPage() {
                     <a
                       href={selectedConcept.video_url}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg whitespace-nowrap shrink-0"
                     >
                       {t('courseLearn.openVideo')}
@@ -776,15 +856,17 @@ export function CourseLearningPage() {
                     <button
                       type="button"
                       onClick={handleCompleteLesson}
-                      disabled={selectedConcept.lessonCompleted}
-                      className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                      disabled={selectedConcept.lessonCompleted || completingLesson}
+                      className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60 ${
                         selectedConcept.lessonCompleted
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default'
                           : 'bg-slate-900 text-white hover:bg-slate-800'
                       }`}
                     >
                       <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                      {selectedConcept.lessonCompleted
+                      {completingLesson
+                        ? t('common.loading')
+                        : selectedConcept.lessonCompleted
                         ? t('courseLearn.lessonCompleted')
                         : t('courseLearn.markLessonComplete')}
                     </button>
@@ -797,13 +879,23 @@ export function CourseLearningPage() {
 
               {/* Quiz Panel */}
               <div className="lg:col-span-6 space-y-5">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-display text-lg font-semibold text-slate-900">
                     {t('courseLearn.quizTitle')}
                   </h3>
-                  <span className="text-xs font-mono tabular-nums font-semibold text-indigo-700">
-                    {t('courseLearn.thresholdLabel', { threshold: quizThreshold })}
-                  </span>
+                  <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
+                    {quizQuestions.length > 0 && user && (
+                      <span className="text-slate-600">
+                        {t('courseLearn.answeredProgress', {
+                          answered: answeredCount,
+                          total: quizQuestions.length,
+                        })}
+                      </span>
+                    )}
+                    <span className="font-semibold text-indigo-700">
+                      {t('courseLearn.thresholdLabel', { threshold: quizThreshold })}
+                    </span>
+                  </div>
                 </div>
 
                 {!user ? (

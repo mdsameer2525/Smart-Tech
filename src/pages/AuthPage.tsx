@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { ApiError } from '../services/api';
 
 const DEMO_USERS = [
@@ -16,6 +17,12 @@ export function AuthPage() {
   const { user, login, register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  useDocumentMeta({
+    title: 'Sign In — Smart-Tech',
+    description: 'Sign in or create a learner or instructor account on Smart-Tech.',
+    canonicalPath: '/auth',
+  });
 
   const [mode, setMode] = useState<'login' | 'register'>(
     searchParams.get('mode') === 'register' ? 'register' : 'login'
@@ -38,8 +45,17 @@ export function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email.trim() || !password.trim() || (mode === 'register' && !name.trim())) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password.trim() || (mode === 'register' && !name.trim())) {
       setError(t('auth.errorRequired'));
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setError(t('auth.errorEmail'));
+      return;
+    }
+    if (mode === 'register' && password.length < 6) {
+      setError(t('auth.errorPasswordLength'));
       return;
     }
 
@@ -51,10 +67,10 @@ export function AuthPage() {
         | 'hi';
       const loggedIn =
         mode === 'login'
-          ? await login(email.trim(), password)
+          ? await login(trimmedEmail, password)
           : await register({
               name: name.trim(),
-              email: email.trim(),
+              email: trimmedEmail,
               password,
               role,
               preferred_language: lang,
@@ -90,20 +106,26 @@ export function AuthPage() {
           </h1>
 
           {error && (
-            <div className="mt-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800">
+            <div
+              role="alert"
+              aria-live="polite"
+              className="mt-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800"
+            >
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
             {mode === 'register' && (
               <>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="auth-name" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     {t('auth.fullName')}
                   </label>
                   <input
+                    id="auth-name"
                     type="text"
+                    required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., Kavya Hegde"
@@ -112,10 +134,11 @@ export function AuthPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="auth-role" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     {t('auth.role')}
                   </label>
                   <select
+                    id="auth-role"
                     value={role}
                     onChange={(e) => setRole(e.target.value as 'learner' | 'instructor')}
                     className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
@@ -128,11 +151,14 @@ export function AuthPage() {
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="auth-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 {t('auth.email')}
               </label>
               <input
+                id="auth-email"
                 type="email"
+                required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@smarttech.edu"
@@ -141,11 +167,14 @@ export function AuthPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="auth-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                 {t('auth.password')}
               </label>
               <input
+                id="auth-password"
                 type="password"
+                required
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -196,7 +225,7 @@ export function AuthPage() {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleDemoLogin(d.email)}
-                className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <div className="text-sm font-semibold text-slate-900">{d.label}</div>
                 <div className="text-xs font-mono text-slate-500 mt-0.5">{d.email}</div>

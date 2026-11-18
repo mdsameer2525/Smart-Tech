@@ -152,3 +152,61 @@ CREATE INDEX IF NOT EXISTS idx_enrollments_learner ON enrollments(learner_id);
 CREATE INDEX IF NOT EXISTS idx_mastery_learner ON concept_mastery(learner_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_status);
 CREATE INDEX IF NOT EXISTS idx_history_course ON curriculum_history(course_id);
+CREATE INDEX IF NOT EXISTS idx_courses_instructor ON courses(instructor_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_learner_quiz ON quiz_attempts(learner_id, quiz_id);
+CREATE INDEX IF NOT EXISTS idx_lessons_progress_learner ON lessons_progress(learner_id, concept_id);
+
+CREATE TABLE IF NOT EXISTS user_gamification (
+  user_id INTEGER PRIMARY KEY,
+  xp INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 1,
+  current_streak INTEGER NOT NULL DEFAULT 0,
+  longest_streak INTEGER NOT NULL DEFAULT 0,
+  last_activity_date TEXT DEFAULT NULL,
+  challenges_completed INTEGER NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS game_scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  game_id TEXT NOT NULL CHECK (game_id IN ('brain_battle', 'code_quest', 'cyber_detective', 'memory_master', 'tech_word_puzzle')),
+  category TEXT NOT NULL DEFAULT 'General',
+  difficulty TEXT NOT NULL DEFAULT 'easy' CHECK (difficulty IN ('easy', 'medium', 'hard')),
+  score INTEGER NOT NULL DEFAULT 0,
+  max_score INTEGER NOT NULL DEFAULT 100,
+  xp_earned INTEGER NOT NULL DEFAULT 0,
+  duration_seconds INTEGER NOT NULL DEFAULT 0,
+  is_daily_challenge INTEGER NOT NULL DEFAULT 0,
+  daily_date TEXT DEFAULT NULL,
+  played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_badges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  badge_key TEXT NOT NULL,
+  unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE (user_id, badge_key)
+);
+
+CREATE TABLE IF NOT EXISTS explore_progress (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  scene_id TEXT NOT NULL CHECK (scene_id IN ('solar_system', 'human_anatomy', 'computer_network', 'chemistry_lab', 'computer_architecture')),
+  inspected_parts_json TEXT NOT NULL DEFAULT '[]',
+  completed INTEGER NOT NULL DEFAULT 0,
+  xp_awarded INTEGER NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE (user_id, scene_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_scores_game_score ON game_scores(game_id, score DESC);
+CREATE INDEX IF NOT EXISTS idx_game_scores_user ON game_scores(user_id, game_id);
+CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id);
+CREATE INDEX IF NOT EXISTS idx_explore_progress_user ON explore_progress(user_id);
+

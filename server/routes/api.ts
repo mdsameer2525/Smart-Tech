@@ -10,6 +10,7 @@ import {
 } from '../graph/graphEngine.ts';
 import {
   optionalAuth,
+  rateLimitAuth,
   requireAuth,
   requireRole,
   signToken,
@@ -24,24 +25,74 @@ import {
   splitConceptInCourse,
 } from '../services/curriculumService.ts';
 
+function parsePositiveInt(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function validateExternalUrl(raw: unknown): { ok: true; url: string } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, url: '' };
+  const trimmed = String(raw).trim();
+  if (!trimmed) return { ok: true, url: '' };
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, error: 'Video URL must use http:// or https://.' };
+    }
+    return { ok: true, url: trimmed };
+  } catch {
+    return { ok: false, error: 'Invalid video URL format. Include http:// or https://.' };
+  }
+}
+
+interface OwnedCourseRow {
+  id: number;
+  instructor_id: number;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+}
+
+function assertCourseOwnership(
+  db: Database.Database,
+  courseId: number,
+  userId: number,
+  res: { status: (code: number) => { json: (body: unknown) => void } }
+): OwnedCourseRow | null {
+  const course = db
+    .prepare('SELECT id, instructor_id, title, description, category, status FROM courses WHERE id = ?')
+    .get(courseId) as OwnedCourseRow | undefined;
+  if (!course) {
+    res.status(404).json({ error: 'Course not found.' });
+    return null;
+  }
+  if (course.instructor_id !== userId) {
+    res.status(403).json({ error: 'Access denied. You do not own this course.' });
+    return null;
+  }
+  return course;
+}
+
 export function createApiRouter(db: Database.Database): Router {
   const router = Router();
+  const authLimiter = rateLimitAuth(80, 15 * 60 * 1000);
 
   // ========================
   // AUTHENTICATION
   // ========================
-  router.post('/auth/register', (req, res) => {
+  router.post('/auth/register', authLimiter, (req, res) => {
     const { name, email, password, role, preferred_language } = req.body ?? {};
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      res.status(400).json({ error: 'Name must be at least 2 characters.' });
+    if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) {
+      res.status(400).json({ error: 'Name must be between 2 and 100 characters.' });
       return;
     }
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    if (!email || typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email.trim())) {
       res.status(400).json({ error: 'A valid email address is required.' });
       return;
     }
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    if (!password || typeof password !== 'string' || password.length < 6 || password.length > 128) {
+      res.status(400).json({ error: 'Password must be between 6 and 128 characters.' });
       return;
     }
     const safeRole = role === 'instructor' ? 'instructor' : 'learner';
@@ -76,16 +127,16 @@ export function createApiRouter(db: Database.Database): Router {
     res.status(201).json({ token, user });
   });
 
-  router.post('/auth/login', (req, res) => {
+  router.post('/auth/login', authLimiter, (req, res) => {
     const { email, password } = req.body ?? {};
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       res.status(400).json({ error: 'Email and password are required.' });
       return;
     }
 
     const row = db
       .prepare('SELECT id, name, email, password_hash, role, preferred_language FROM users WHERE email = ?')
-      .get(String(email).trim().toLowerCase()) as
+      .get(email.trim().toLowerCase()) as
       | {
           id: number;
           name: string;
@@ -96,7 +147,7 @@ export function createApiRouter(db: Database.Database): Router {
         }
       | undefined;
 
-    if (!row || !bcrypt.compareSync(String(password), row.password_hash)) {
+    if (!row || !bcrypt.compareSync(password, row.password_hash)) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
     }
@@ -167,11 +218,20 @@ export function createApiRouter(db: Database.Database): Router {
       return;
     }
 
-    res.json({ courses: rows });
+    res.json({
+      courses: rows.map((c) => ({
+        ...c,
+        is_owner: Boolean(req.user && Number(c.instructor_id) === req.user.id),
+      })),
+    });
   });
 
   router.get('/courses/:id', optionalAuth, (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const course = db
       .prepare(
         `SELECT c.*, u.name as instructor_name,
@@ -226,23 +286,29 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.put('/courses/:id', requireAuth, requireRole('instructor'), (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
-    const existing = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as
-      | { id: number; title: string; description: string; category: string; status: string }
-      | undefined;
-    if (!existing) {
-      res.status(404).json({ error: 'Course not found.' });
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
       return;
     }
+    const existing = assertCourseOwnership(db, courseId, req.user!.id, res);
+    if (!existing) return;
 
     const { title, description, category, status } = req.body ?? {};
+    if (title !== undefined && (typeof title !== 'string' || title.trim().length < 3)) {
+      res.status(400).json({ error: 'Course title must be at least 3 characters.' });
+      return;
+    }
+    const safeStatus =
+      status === 'published' || status === 'draft' || status === 'archived' ? status : existing.status;
+
     db.prepare(
       `UPDATE courses SET title = ?, description = ?, category = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
     ).run(
-      title?.trim() || existing.title,
+      title !== undefined ? title.trim() : existing.title,
       description !== undefined ? String(description).trim() : existing.description,
-      category?.trim() || existing.category,
-      status || existing.status,
+      category !== undefined && String(category).trim() ? String(category).trim() : existing.category,
+      safeStatus,
       courseId
     );
 
@@ -251,12 +317,13 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.delete('/courses/:id', requireAuth, requireRole('instructor'), (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
-    const existing = db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
-    if (!existing) {
-      res.status(404).json({ error: 'Course not found.' });
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
       return;
     }
+    const existing = assertCourseOwnership(db, courseId, req.user!.id, res);
+    if (!existing) return;
     db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
     res.json({ deleted: true, id: courseId });
   });
@@ -265,7 +332,11 @@ export function createApiRouter(db: Database.Database): Router {
   // CONCEPTS
   // ========================
   router.get('/courses/:id/concepts', (req, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const { nodes, edges } = loadCourseGraph(db, courseId);
     const topo = topologicalSort(nodes, edges);
 
@@ -297,12 +368,13 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const courseId = Number(req.params.id);
-      const course = db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
-      if (!course) {
-        res.status(404).json({ error: 'Course not found.' });
+      const courseId = parsePositiveInt(req.params.id);
+      if (!courseId) {
+        res.status(400).json({ error: 'Invalid course ID.' });
         return;
       }
+      const course = assertCourseOwnership(db, courseId, req.user!.id, res);
+      if (!course) return;
 
       const {
         title,
@@ -319,6 +391,12 @@ export function createApiRouter(db: Database.Database): Router {
         return;
       }
 
+      const urlCheck = validateExternalUrl(video_url);
+      if (!urlCheck.ok) {
+        res.status(400).json({ error: urlCheck.error });
+        return;
+      }
+
       const result = db
         .prepare(
           `INSERT INTO concepts (course_id, title, description, lesson_content, video_url, estimated_duration, status)
@@ -329,7 +407,7 @@ export function createApiRouter(db: Database.Database): Router {
           title.trim(),
           (description || '').trim() || `Core fundamentals of ${title.trim()}.`,
           (lesson_content || '').trim() || `Study material for ${title.trim()}.`,
-          (video_url || '').trim(),
+          urlCheck.url,
           Math.max(5, Number(estimated_duration) || 20)
         );
 
@@ -345,12 +423,14 @@ export function createApiRouter(db: Database.Database): Router {
       );
       if (Array.isArray(questions) && questions.length > 0) {
         for (const q of questions) {
+          const opts = Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Option A', 'Option B'];
+          const safeCorrect = Math.min(opts.length - 1, Math.max(0, Number(q.correct_answer) || 0));
           insertQ.run(
             quizId,
-            q.question,
-            JSON.stringify(q.options || ['Option A', 'Option B']),
-            Number(q.correct_answer) || 0,
-            q.explanation || ''
+            String(q.question || '').trim() || `Question for ${title.trim()}`,
+            JSON.stringify(opts.map((o: unknown) => String(o).trim())),
+            safeCorrect,
+            String(q.explanation || '').trim()
           );
         }
       } else {
@@ -375,7 +455,11 @@ export function createApiRouter(db: Database.Database): Router {
   );
 
   router.put('/concepts/:id', requireAuth, requireRole('instructor'), (req: AuthenticatedRequest, res) => {
-    const conceptId = Number(req.params.id);
+    const conceptId = parsePositiveInt(req.params.id);
+    if (!conceptId) {
+      res.status(400).json({ error: 'Invalid concept ID.' });
+      return;
+    }
     const existing = db.prepare('SELECT * FROM concepts WHERE id = ?').get(conceptId) as
       | {
           id: number;
@@ -394,18 +478,36 @@ export function createApiRouter(db: Database.Database): Router {
       return;
     }
 
+    const owned = assertCourseOwnership(db, existing.course_id, req.user!.id, res);
+    if (!owned) return;
+
     const { title, description, lesson_content, video_url, estimated_duration, mastery_threshold } =
       req.body ?? {};
+
+    if (title !== undefined && (typeof title !== 'string' || title.trim().length < 2)) {
+      res.status(400).json({ error: 'Concept title must be at least 2 characters.' });
+      return;
+    }
+
+    let nextVideoUrl = existing.video_url;
+    if (video_url !== undefined) {
+      const urlCheck = validateExternalUrl(video_url);
+      if (!urlCheck.ok) {
+        res.status(400).json({ error: urlCheck.error });
+        return;
+      }
+      nextVideoUrl = urlCheck.url;
+    }
 
     db.prepare(
       `UPDATE concepts
        SET title = ?, description = ?, lesson_content = ?, video_url = ?, estimated_duration = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
     ).run(
-      title?.trim() || existing.title,
+      title !== undefined ? title.trim() : existing.title,
       description !== undefined ? String(description).trim() : existing.description,
       lesson_content !== undefined ? String(lesson_content) : existing.lesson_content,
-      video_url !== undefined ? String(video_url).trim() : existing.video_url,
+      nextVideoUrl,
       estimated_duration !== undefined
         ? Math.max(5, Number(estimated_duration) || existing.estimated_duration)
         : existing.estimated_duration,
@@ -425,7 +527,11 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.delete('/concepts/:id', requireAuth, requireRole('instructor'), (req: AuthenticatedRequest, res) => {
-    const conceptId = Number(req.params.id);
+    const conceptId = parsePositiveInt(req.params.id);
+    if (!conceptId) {
+      res.status(400).json({ error: 'Invalid concept ID.' });
+      return;
+    }
     const existing = db.prepare('SELECT * FROM concepts WHERE id = ?').get(conceptId) as
       | { id: number; course_id: number; title: string }
       | undefined;
@@ -433,6 +539,9 @@ export function createApiRouter(db: Database.Database): Router {
       res.status(404).json({ error: 'Concept not found.' });
       return;
     }
+
+    const owned = assertCourseOwnership(db, existing.course_id, req.user!.id, res);
+    if (!owned) return;
 
     // Archive instead of hard-deleting if learners have mastery or attempt records
     const hasHistory = db
@@ -458,7 +567,11 @@ export function createApiRouter(db: Database.Database): Router {
   // GRAPH & CYCLE DETECTION
   // ========================
   router.get('/courses/:id/graph', (req, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const { nodes, edges } = loadCourseGraph(db, courseId);
     const validation = validateDAG(nodes, edges);
     const topo = topologicalSort(nodes, edges);
@@ -481,12 +594,18 @@ export function createApiRouter(db: Database.Database): Router {
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
       const { courseId, prerequisiteConceptId, dependentConceptId } = req.body ?? {};
-      const { nodes, edges } = loadCourseGraph(db, Number(courseId));
-      const check = addPrerequisiteEdge(
-        { nodes, edges },
-        Number(prerequisiteConceptId),
-        Number(dependentConceptId)
-      );
+      const cid = parsePositiveInt(courseId);
+      const prereqId = parsePositiveInt(prerequisiteConceptId);
+      const depId = parsePositiveInt(dependentConceptId);
+      if (!cid || !prereqId || !depId) {
+        res.status(400).json({ error: 'Valid courseId, prerequisiteConceptId, and dependentConceptId are required.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, cid, req.user!.id, res);
+      if (!owned) return;
+
+      const { nodes, edges } = loadCourseGraph(db, cid);
+      const check = addPrerequisiteEdge({ nodes, edges }, prereqId, depId);
       res.json({
         valid: check.valid,
         cyclePath: check.cyclePath,
@@ -502,18 +621,17 @@ export function createApiRouter(db: Database.Database): Router {
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
       const { courseId, prerequisiteConceptId, dependentConceptId } = req.body ?? {};
-      if (!courseId || !prerequisiteConceptId || !dependentConceptId) {
+      const cid = parsePositiveInt(courseId);
+      const prereqId = parsePositiveInt(prerequisiteConceptId);
+      const depId = parsePositiveInt(dependentConceptId);
+      if (!cid || !prereqId || !depId) {
         res.status(400).json({ error: 'courseId, prerequisiteConceptId, and dependentConceptId are required.' });
         return;
       }
+      const owned = assertCourseOwnership(db, cid, req.user!.id, res);
+      if (!owned) return;
 
-      const result = applyPrerequisiteAdd(
-        db,
-        Number(courseId),
-        req.user!.id,
-        Number(prerequisiteConceptId),
-        Number(dependentConceptId)
-      );
+      const result = applyPrerequisiteAdd(db, cid, req.user!.id, prereqId, depId);
 
       if (!result.ok) {
         res.status(result.status).json({
@@ -533,7 +651,21 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const edgeId = Number(req.params.id);
+      const edgeId = parsePositiveInt(req.params.id);
+      if (!edgeId) {
+        res.status(400).json({ error: 'Invalid prerequisite edge ID.' });
+        return;
+      }
+      const edgeRow = db
+        .prepare('SELECT course_id FROM prerequisites WHERE id = ?')
+        .get(edgeId) as { course_id: number } | undefined;
+      if (!edgeRow) {
+        res.status(404).json({ error: 'Prerequisite link not found.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, edgeRow.course_id, req.user!.id, res);
+      if (!owned) return;
+
       const result = applyPrerequisiteRemove(db, edgeId, req.user!.id);
       if (!result.ok) {
         res.status(result.status).json({ error: result.error });
@@ -547,7 +679,11 @@ export function createApiRouter(db: Database.Database): Router {
   // ENROLLMENT & LEARNER PROGRESS
   // ========================
   router.post('/courses/:id/enroll', requireAuth, (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const course = db.prepare('SELECT id, title FROM courses WHERE id = ?').get(courseId) as
       | { id: number; title: string }
       | undefined;
@@ -609,7 +745,11 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.get('/courses/:id/progress', requireAuth, (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId);
     if (!course) {
       res.status(404).json({ error: 'Course not found.' });
@@ -630,16 +770,31 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.patch('/courses/:id/target', requireAuth, (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
-    const { targetConceptId } = req.body ?? {};
+    const courseId = parsePositiveInt(req.params.id);
+    const targetId = parsePositiveInt(req.body?.targetConceptId);
+    if (!courseId || !targetId) {
+      res.status(400).json({ error: 'Valid course ID and targetConceptId are required.' });
+      return;
+    }
+    const targetConcept = db
+      .prepare("SELECT id FROM concepts WHERE id = ? AND course_id = ? AND status = 'active'")
+      .get(targetId, courseId);
+    if (!targetConcept) {
+      res.status(404).json({ error: 'Target concept not found in this course.' });
+      return;
+    }
     db.prepare(
       'UPDATE enrollments SET target_concept_id = ? WHERE learner_id = ? AND course_id = ?'
-    ).run(Number(targetConceptId), req.user!.id, courseId);
-    res.json({ targetConceptId: Number(targetConceptId) });
+    ).run(targetId, req.user!.id, courseId);
+    res.json({ targetConceptId: targetId });
   });
 
   router.patch('/lessons/:id/complete', requireAuth, (req: AuthenticatedRequest, res) => {
-    const conceptId = Number(req.params.id);
+    const conceptId = parsePositiveInt(req.params.id);
+    if (!conceptId) {
+      res.status(400).json({ error: 'Invalid concept ID.' });
+      return;
+    }
     const concept = db.prepare('SELECT id, course_id FROM concepts WHERE id = ?').get(conceptId) as
       | { id: number; course_id: number }
       | undefined;
@@ -688,7 +843,11 @@ export function createApiRouter(db: Database.Database): Router {
   // QUIZZES & MASTERY
   // ========================
   router.get('/concepts/:id/quiz', requireAuth, (req: AuthenticatedRequest, res) => {
-    const conceptId = Number(req.params.id);
+    const conceptId = parsePositiveInt(req.params.id);
+    if (!conceptId) {
+      res.status(400).json({ error: 'Invalid concept ID.' });
+      return;
+    }
     const concept = db.prepare('SELECT * FROM concepts WHERE id = ?').get(conceptId) as
       | { id: number; course_id: number; title: string }
       | undefined;
@@ -741,7 +900,21 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const conceptId = Number(req.params.id);
+      const conceptId = parsePositiveInt(req.params.id);
+      if (!conceptId) {
+        res.status(400).json({ error: 'Invalid concept ID.' });
+        return;
+      }
+      const conceptRow = db
+        .prepare('SELECT course_id FROM concepts WHERE id = ?')
+        .get(conceptId) as { course_id: number } | undefined;
+      if (!conceptRow) {
+        res.status(404).json({ error: 'Concept not found.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, conceptRow.course_id, req.user!.id, res);
+      if (!owned) return;
+
       const { title, mastery_threshold, questions } = req.body ?? {};
       const quiz = db.prepare('SELECT id FROM quizzes WHERE concept_id = ?').get(conceptId) as
         | { id: number }
@@ -749,6 +922,16 @@ export function createApiRouter(db: Database.Database): Router {
       if (!quiz) {
         res.status(404).json({ error: 'Quiz not found for concept.' });
         return;
+      }
+
+      if (Array.isArray(questions)) {
+        const validQuestions = questions.filter(
+          (q) => q && typeof q.question === 'string' && q.question.trim().length > 0 && Array.isArray(q.options) && q.options.length >= 2
+        );
+        if (validQuestions.length === 0) {
+          res.status(400).json({ error: 'At least one valid question with two options is required.' });
+          return;
+        }
       }
 
       const safeThreshold = Math.min(100, Math.max(40, Number(mastery_threshold) || 70));
@@ -765,12 +948,17 @@ export function createApiRouter(db: Database.Database): Router {
             'INSERT INTO quiz_questions (quiz_id, question, options, correct_answer, explanation) VALUES (?, ?, ?, ?, ?)'
           );
           for (const q of questions) {
-            if (!q.question || !Array.isArray(q.options) || q.options.length < 2) continue;
+            if (!q || typeof q.question !== 'string' || !q.question.trim() || !Array.isArray(q.options) || q.options.length < 2) continue;
+            const cleanedOpts = q.options.map((o: unknown) => String(o).trim());
+            const safeCorrect = Math.min(
+              cleanedOpts.length - 1,
+              Math.max(0, Number(q.correct_answer) || 0)
+            );
             insertQ.run(
               quiz.id,
-              String(q.question).trim(),
-              JSON.stringify(q.options.map((o: unknown) => String(o).trim())),
-              Number(q.correct_answer) || 0,
+              q.question.trim(),
+              JSON.stringify(cleanedOpts),
+              safeCorrect,
               String(q.explanation || '').trim()
             );
           }
@@ -783,7 +971,11 @@ export function createApiRouter(db: Database.Database): Router {
   );
 
   router.post('/quizzes/:id/attempt', requireAuth, (req: AuthenticatedRequest, res) => {
-    const quizId = Number(req.params.id);
+    const quizId = parsePositiveInt(req.params.id);
+    if (!quizId) {
+      res.status(400).json({ error: 'Invalid quiz ID.' });
+      return;
+    }
     const { answers } = req.body ?? {};
 
     const quiz = db
@@ -909,7 +1101,11 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.get('/concepts/:id/mastery', requireAuth, (req: AuthenticatedRequest, res) => {
-    const conceptId = Number(req.params.id);
+    const conceptId = parsePositiveInt(req.params.id);
+    if (!conceptId) {
+      res.status(400).json({ error: 'Invalid concept ID.' });
+      return;
+    }
     const concept = db.prepare('SELECT id, course_id, title FROM concepts WHERE id = ?').get(conceptId) as
       | { id: number; course_id: number; title: string }
       | undefined;
@@ -946,8 +1142,12 @@ export function createApiRouter(db: Database.Database): Router {
     '/courses/:id/learning-path/:targetConceptId',
     requireAuth,
     (req: AuthenticatedRequest, res) => {
-      const courseId = Number(req.params.id);
-      const targetConceptId = Number(req.params.targetConceptId);
+      const courseId = parsePositiveInt(req.params.id);
+      const targetConceptId = parsePositiveInt(req.params.targetConceptId);
+      if (!courseId || !targetConceptId) {
+        res.status(400).json({ error: 'Invalid course ID or target concept ID.' });
+        return;
+      }
       const { nodes, edges } = loadCourseGraph(db, courseId);
 
       if (!nodes.some((n) => n.id === targetConceptId)) {
@@ -988,7 +1188,25 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const result = splitConceptInCourse(db, req.user!.id, req.body ?? {});
+      const conceptId = parsePositiveInt(req.body?.conceptId);
+      if (!conceptId) {
+        res.status(400).json({ error: 'Valid conceptId is required.' });
+        return;
+      }
+      const conceptRow = db
+        .prepare('SELECT course_id FROM concepts WHERE id = ?')
+        .get(conceptId) as { course_id: number } | undefined;
+      if (!conceptRow) {
+        res.status(404).json({ error: 'Concept not found.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, conceptRow.course_id, req.user!.id, res);
+      if (!owned) return;
+
+      const result = splitConceptInCourse(db, req.user!.id, {
+        ...(req.body ?? {}),
+        conceptId,
+      });
       if (!result.ok) {
         res.status(result.status).json({ error: result.error, cycleTitles: (result as { cycleTitles?: string[] }).cycleTitles });
         return;
@@ -998,7 +1216,11 @@ export function createApiRouter(db: Database.Database): Router {
   );
 
   router.get('/courses/:id/history', requireAuth, (req: AuthenticatedRequest, res) => {
-    const courseId = Number(req.params.id);
+    const courseId = parsePositiveInt(req.params.id);
+    if (!courseId) {
+      res.status(400).json({ error: 'Invalid course ID.' });
+      return;
+    }
     const history = db
       .prepare(
         `SELECT ch.*, u.name as instructor_name
@@ -1016,7 +1238,14 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const courseId = Number(req.params.id);
+      const courseId = parsePositiveInt(req.params.id);
+      if (!courseId) {
+        res.status(400).json({ error: 'Invalid course ID.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, courseId, req.user!.id, res);
+      if (!owned) return;
+
       const learners = db
         .prepare(
           `SELECT u.id, u.name, u.email, e.target_concept_id, e.enrolled_at,
@@ -1053,8 +1282,14 @@ export function createApiRouter(db: Database.Database): Router {
     requireAuth,
     requireRole('instructor'),
     (req: AuthenticatedRequest, res) => {
-      const { courseId } = req.body ?? {};
-      const cid = Number(courseId);
+      const cid = parsePositiveInt(req.body?.courseId);
+      if (!cid) {
+        res.status(400).json({ error: 'Valid courseId is required.' });
+        return;
+      }
+      const owned = assertCourseOwnership(db, cid, req.user!.id, res);
+      if (!owned) return;
+
       const { nodes, edges } = loadCourseGraph(db, cid);
       const dagCheck = validateDAG(nodes, edges);
       const learnerStates = getEnrolledLearnerStates(db, cid);
@@ -1103,7 +1338,11 @@ export function createApiRouter(db: Database.Database): Router {
   });
 
   router.patch('/notifications/:id/read', requireAuth, (req: AuthenticatedRequest, res) => {
-    const notifId = Number(req.params.id);
+    const notifId = parsePositiveInt(req.params.id);
+    if (!notifId) {
+      res.status(400).json({ error: 'Invalid notification ID.' });
+      return;
+    }
     db.prepare('UPDATE notifications SET read_status = 1 WHERE id = ? AND user_id = ?').run(
       notifId,
       req.user!.id

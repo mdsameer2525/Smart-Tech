@@ -61,6 +61,18 @@ export function Navbar() {
           >
             {t('nav.courses')}
           </Link>
+          <Link
+            to="/games"
+            className={navLinkClass(location.pathname.startsWith('/games'))}
+          >
+            {t('nav.gameZone')}
+          </Link>
+          <Link
+            to="/explore"
+            className={navLinkClass(location.pathname.startsWith('/explore'))}
+          >
+            {t('nav.explore3d')}
+          </Link>
         </nav>
 
         {/* Zone 3: Language selector + Primary Action */}
@@ -152,6 +164,20 @@ export function Navbar() {
               className="py-2 text-sm font-medium text-slate-700"
             >
               {t('nav.courses')}
+            </Link>
+            <Link
+              to="/games"
+              onClick={() => setMobileOpen(false)}
+              className="py-2 text-sm font-medium text-slate-700"
+            >
+              {t('nav.gameZone')}
+            </Link>
+            <Link
+              to="/explore"
+              onClick={() => setMobileOpen(false)}
+              className="py-2 text-sm font-medium text-slate-700"
+            >
+              {t('nav.explore3d')}
             </Link>
           </div>
 

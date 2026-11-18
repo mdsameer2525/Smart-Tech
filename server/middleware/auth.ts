@@ -13,7 +13,14 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthUser;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'smart-tech-dev-jwt-secret-change-in-production';
+const DEFAULT_DEV_SECRET = 'smart-tech-dev-jwt-secret-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_DEV_SECRET;
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.warn(
+    '[security] WARNING: JWT_SECRET environment variable is not set in production. Set a strong random secret before deploying.'
+  );
+}
 
 export function signToken(user: AuthUser): string {
   return jwt.sign(
@@ -72,6 +79,39 @@ export function requireRole(role: 'instructor' | 'learner') {
       res.status(403).json({ error: `Access denied. ${role} role required.` });
       return;
     }
+    next();
+  };
+}
+
+interface RateBucket {
+  count: number;
+  resetAt: number;
+}
+
+const authRateBuckets = new Map<string, RateBucket>();
+
+export function rateLimitAuth(maxRequests = 60, windowMs = 15 * 60 * 1000) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const key = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const current = authRateBuckets.get(key);
+
+    if (!current || current.resetAt <= now) {
+      authRateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      next();
+      return;
+    }
+
+    if (current.count >= maxRequests) {
+      const retryAfterSec = Math.max(1, Math.ceil((current.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfterSec));
+      res.status(429).json({
+        error: 'Too many authentication attempts. Please wait a moment and try again.',
+      });
+      return;
+    }
+
+    current.count += 1;
     next();
   };
 }

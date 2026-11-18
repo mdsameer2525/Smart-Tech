@@ -164,4 +164,81 @@ describe('Smart-Tech Backend API Integration', () => {
       notifRes.data.notifications.some((n: { message_key: string }) => n.message_key === 'notif.concept_split')
     ).toBe(true);
   });
+
+  it('enforces security headers, URL validation, ID checks, and instructor course ownership', async () => {
+    const healthRes = await fetch(`${serverUrl}/api/health`);
+    expect(healthRes.status).toBe(200);
+    expect(healthRes.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(healthRes.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(healthRes.headers.get('x-powered-by')).toBeNull();
+
+    // Invalid IDs return 400 rather than 500 or blank lookups
+    const invalidCourse = await api('/courses/not-a-number');
+    expect(invalidCourse.status).toBe(400);
+
+    // Unknown API route returns JSON 404
+    const missingApi = await api('/does-not-exist');
+    expect(missingApi.status).toBe(404);
+
+    // Register a second instructor and verify they CANNOT modify Dr. Rao's course #1
+    const inst2Res = await api('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Second Instructor',
+        email: 'instructor2@smarttech.edu',
+        password: 'password123',
+        role: 'instructor',
+      }),
+    });
+    expect(inst2Res.status).toBe(201);
+    const inst2Token = inst2Res.data.token as string;
+
+    const hijackCourse = await api(
+      '/courses/1',
+      { method: 'PUT', body: JSON.stringify({ title: 'Unauthorized Rename' }) },
+      inst2Token
+    );
+    expect(hijackCourse.status).toBe(403);
+
+    const hijackConcept = await api(
+      '/courses/1/concepts',
+      { method: 'POST', body: JSON.stringify({ title: 'Injected Node' }) },
+      inst2Token
+    );
+    expect(hijackConcept.status).toBe(403);
+
+    // Second instructor creates their own course, rejects unsafe javascript: URL, then updates & deletes
+    const ownCourse = await api(
+      '/courses',
+      { method: 'POST', body: JSON.stringify({ title: 'Systems Design', category: 'Architecture' }) },
+      inst2Token
+    );
+    expect(ownCourse.status).toBe(201);
+    const ownCourseId = ownCourse.data.course.id as number;
+
+    const unsafeUrl = await api(
+      `/courses/${ownCourseId}/concepts`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'Load Balancing',
+          video_url: 'javascript:alert(1)',
+        }),
+      },
+      inst2Token
+    );
+    expect(unsafeUrl.status).toBe(400);
+
+    const renameOwn = await api(
+      `/courses/${ownCourseId}`,
+      { method: 'PUT', body: JSON.stringify({ title: 'Distributed Systems Design' }) },
+      inst2Token
+    );
+    expect(renameOwn.status).toBe(200);
+    expect(renameOwn.data.course.title).toBe('Distributed Systems Design');
+
+    const deleteOwn = await api(`/courses/${ownCourseId}`, { method: 'DELETE' }, inst2Token);
+    expect(deleteOwn.status).toBe(200);
+  });
 });
+

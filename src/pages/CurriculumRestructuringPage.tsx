@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ConceptGraphCanvas } from '../graph/ConceptGraphCanvas';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import { ApiError, apiRequest } from '../services/api';
 
 interface GraphNode {
@@ -56,7 +57,8 @@ interface EnrolledLearnerRow {
 
 export function CurriculumRestructuringPage() {
   const { courseId } = useParams();
-  const cid = Number(courseId || 1);
+  const parsedCid = Number(courseId);
+  const cid = Number.isInteger(parsedCid) && parsedCid > 0 ? parsedCid : 0;
   const { t } = useTranslation();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -66,6 +68,11 @@ export function CurriculumRestructuringPage() {
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [history, setHistory] = useState<CurriculumHistoryEntry[]>([]);
   const [learners, setLearners] = useState<EnrolledLearnerRow[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [addingEdge, setAddingEdge] = useState(false);
+  const [removingEdgeId, setRemovingEdgeId] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<'editor' | 'history' | 'learners'>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
@@ -91,28 +98,46 @@ export function CurriculumRestructuringPage() {
   const [migrationPolicy, setMigrationPolicy] = useState('');
   const [splitting, setSplitting] = useState(false);
 
+  useDocumentMeta({
+    title: courseTitle ? `${courseTitle} — ${t('graphEditor.title')} | Smart-Tech` : `${t('graphEditor.title')} | Smart-Tech`,
+    description: t('graphEditor.subtitle'),
+  });
+
   const loadAll = useCallback(async () => {
-    const [courseRes, graphRes, histRes, learnerRes] = await Promise.all([
-      apiRequest<{ course: { title: string } }>(`/courses/${cid}`),
-      apiRequest<{ nodes: GraphNode[]; edges: GraphEdge[] }>(`/courses/${cid}/graph`),
-      apiRequest<{ history: CurriculumHistoryEntry[] }>(`/courses/${cid}/history`),
-      apiRequest<{ learners: EnrolledLearnerRow[] }>(`/courses/${cid}/enrolled-learners`),
-    ]);
-
-    setCourseTitle(courseRes.course.title);
-    setNodes(graphRes.nodes);
-    setEdges(graphRes.edges);
-    setHistory(histRes.history);
-    setLearners(learnerRes.learners);
-
-    setSelectedNodeId((prev) =>
-      prev && graphRes.nodes.some((n) => n.id === prev) ? prev : graphRes.nodes[0]?.id ?? null
-    );
-    if (graphRes.nodes.length >= 2) {
-      setFromId((prev) => (prev ? prev : graphRes.nodes[0].id));
-      setToId((prev) => (prev ? prev : graphRes.nodes[1].id));
+    if (!cid) {
+      setLoadError(t('graphEditor.loadError'));
+      setLoading(false);
+      return;
     }
-  }, [cid]);
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [courseRes, graphRes, histRes, learnerRes] = await Promise.all([
+        apiRequest<{ course: { title: string } }>(`/courses/${cid}`),
+        apiRequest<{ nodes: GraphNode[]; edges: GraphEdge[] }>(`/courses/${cid}/graph`),
+        apiRequest<{ history: CurriculumHistoryEntry[] }>(`/courses/${cid}/history`),
+        apiRequest<{ learners: EnrolledLearnerRow[] }>(`/courses/${cid}/enrolled-learners`),
+      ]);
+
+      setCourseTitle(courseRes.course.title);
+      setNodes(graphRes.nodes);
+      setEdges(graphRes.edges);
+      setHistory(histRes.history);
+      setLearners(learnerRes.learners);
+
+      setSelectedNodeId((prev) =>
+        prev && graphRes.nodes.some((n) => n.id === prev) ? prev : graphRes.nodes[0]?.id ?? null
+      );
+      if (graphRes.nodes.length >= 2) {
+        setFromId((prev) => (prev && graphRes.nodes.some((n) => n.id === prev) ? prev : graphRes.nodes[0].id));
+        setToId((prev) => (prev && graphRes.nodes.some((n) => n.id === prev) ? prev : graphRes.nodes[1].id));
+      }
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : t('graphEditor.loadError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [cid, t]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -137,7 +162,8 @@ export function CurriculumRestructuringPage() {
 
   const handleAddEdge = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fromId || !toId) return;
+    if (!fromId || !toId || addingEdge) return;
+    setAddingEdge(true);
     setCycleError(null);
     setSuccessMsg('');
 
@@ -163,16 +189,32 @@ export function CurriculumRestructuringPage() {
           cyclePath,
           cycleTitles,
         });
+      } else {
+        setCycleError({ message: t('common.error'), cyclePath: [], cycleTitles: [] });
       }
+    } finally {
+      setAddingEdge(false);
     }
   };
 
   const handleRemoveEdge = async (edgeId: number) => {
+    if (removingEdgeId !== null) return;
+    setRemovingEdgeId(edgeId);
     setCycleError(null);
     setSuccessMsg('');
-    await apiRequest(`/graph/prerequisites/${edgeId}`, { method: 'DELETE' });
-    setSuccessMsg(t('graphEditor.edgeRemovedSuccess'));
-    await loadAll();
+    try {
+      await apiRequest(`/graph/prerequisites/${edgeId}`, { method: 'DELETE' });
+      setSuccessMsg(t('graphEditor.edgeRemovedSuccess'));
+      await loadAll();
+    } catch (err) {
+      setCycleError({
+        message: err instanceof ApiError ? err.message : t('common.error'),
+        cyclePath: [],
+        cycleTitles: [],
+      });
+    } finally {
+      setRemovingEdgeId(null);
+    }
   };
 
   const openSplitModal = (node: GraphNode) => {
@@ -227,6 +269,41 @@ export function CurriculumRestructuringPage() {
       setSplitting(false);
     }
   };
+
+  if (loading || authLoading) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+        <div className="h-8 w-80 bg-slate-200 rounded animate-pulse" />
+        <div className="h-[460px] bg-white border border-slate-200 rounded-xl animate-pulse" />
+      </main>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+        <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center space-y-4">
+          <p className="text-sm text-rose-800 font-medium">{loadError}</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/instructor"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {t('graphEditor.backInstructor')}
+            </Link>
+            <button
+              type="button"
+              onClick={loadAll}
+              className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -384,9 +461,10 @@ export function CurriculumRestructuringPage() {
 
               <button
                 type="submit"
-                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer"
+                disabled={addingEdge || nodes.length < 2}
+                className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
               >
-                {t('graphEditor.connectBtn')}
+                {addingEdge ? t('common.loading') : t('graphEditor.connectBtn')}
               </button>
             </form>
 
@@ -422,11 +500,12 @@ export function CurriculumRestructuringPage() {
                           </span>
                           <button
                             type="button"
+                            disabled={removingEdgeId === edge.id}
                             onClick={() => handleRemoveEdge(edge.id)}
-                            className="text-rose-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            className="text-rose-700 hover:underline inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
                             <Trash2 className="w-3 h-3" />
-                            {t('graphEditor.removeLink')}
+                            {removingEdgeId === edge.id ? t('common.loading') : t('graphEditor.removeLink')}
                           </button>
                         </div>
                       ))}
@@ -453,11 +532,12 @@ export function CurriculumRestructuringPage() {
                           </span>
                           <button
                             type="button"
+                            disabled={removingEdgeId === edge.id}
                             onClick={() => handleRemoveEdge(edge.id)}
-                            className="text-rose-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                            className="text-rose-700 hover:underline inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
                             <Trash2 className="w-3 h-3" />
-                            {t('graphEditor.removeLink')}
+                            {removingEdgeId === edge.id ? t('common.loading') : t('graphEditor.removeLink')}
                           </button>
                         </div>
                       ))}

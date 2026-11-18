@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /learner
+Disallow: /instructor
+
+Sitemap: /sitemap.xml
